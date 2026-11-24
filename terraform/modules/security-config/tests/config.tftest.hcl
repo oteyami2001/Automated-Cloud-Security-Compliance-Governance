@@ -76,6 +76,26 @@ run "controls_can_be_disabled" {
   }
 }
 
+run "periodic_rules_have_no_scope_and_retention_has_custom_check" {
+  command = apply
+  variables {
+    enable_custom_rules    = true
+    custom_rule_lambda_arn = "arn:aws:lambda:us-east-2:111122223333:function:acscg-dev-config-evaluator"
+  }
+  assert {
+    condition     = aws_config_config_rule.managed["sec014-log-retention"].maximum_execution_frequency == "TwentyFour_Hours" && length(aws_config_config_rule.managed["sec014-log-retention"].scope) == 0
+    error_message = "CW_LOGGROUP_RETENTION_PERIOD_CHECK is periodic (AWS Config developer guide)"
+  }
+  assert {
+    condition     = tolist(one(aws_config_config_rule.custom["sec014-retention-set"].scope).compliance_resource_types) == tolist(["AWS::Logs::LogGroup"])
+    error_message = "never-expire log groups need the custom retention check"
+  }
+  assert {
+    condition     = !contains(one(aws_config_config_rule.managed["sec013-required-tags"].scope).compliance_resource_types, "AWS::Lambda::Function")
+    error_message = "REQUIRED_TAGS does not support Lambda functions"
+  }
+}
+
 run "invalid_mode_rejected" {
   command = plan
   variables {

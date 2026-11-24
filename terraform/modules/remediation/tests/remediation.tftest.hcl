@@ -8,9 +8,6 @@ mock_provider "aws" {
   mock_resource "aws_cloudwatch_log_group" {
     defaults = { arn = "arn:aws:logs:us-east-2:111122223333:log-group:/aws/lambda/acscg-dev-remediation-gatekeeper" }
   }
-  mock_resource "aws_ssm_parameter" {
-    defaults = { arn = "arn:aws:ssm:us-east-2:111122223333:parameter/acscg/dev/platform-policy" }
-  }
 }
 
 variables {
@@ -21,13 +18,13 @@ variables {
   lambda_package_path   = "../../../tests/fixtures/lambda.zip"
   runbooks_dir          = "../../../runbooks"
   policy_parameter_name = "/acscg/dev/platform-policy"
+  policy_parameter_arn  = "arn:aws:ssm:us-east-2:111122223333:parameter/acscg/dev/platform-policy"
   table_name            = "acscg-dev-findings"
   table_arn             = "arn:aws:dynamodb:us-east-2:111122223333:table/acscg-dev-findings"
   evidence_bucket_name  = "acscg-dev-evidence-111122223333-us-east-2"
   kms_key_arn           = "arn:aws:kms:us-east-2:111122223333:key/11111111-2222-3333-4444-555555555555"
   topic_arn             = "arn:aws:sns:us-east-2:111122223333:acscg-dev-security-alerts"
   dlq_arn               = "arn:aws:sqs:us-east-2:111122223333:acscg-dev-findings-dlq"
-  approvers             = ["arn:aws:iam::111122223333:role/security-approver"]
   policy_source = {
     environment         = "dev"
     remediation_enabled = false
@@ -57,12 +54,8 @@ run "report_only_roles_cannot_change_anything" {
     error_message = "the runbook must default to its own execution role"
   }
   assert {
-    condition     = aws_ssm_parameter.policy.type == "SecureString"
-    error_message = "the rendered policy is stored encrypted"
-  }
-  assert {
-    condition     = jsondecode(aws_ssm_parameter.policy.value).approval.approvers == ["arn:aws:iam::111122223333:role/security-approver"]
-    error_message = "approvers must be rendered into the policy"
+    condition     = [for s in jsondecode(aws_iam_role_policy.gatekeeper.policy).Statement : s.Resource if s.Sid == "PolicyRead"][0] == "arn:aws:ssm:us-east-2:111122223333:parameter/acscg/dev/platform-policy"
+    error_message = "the gatekeeper reads exactly the stack's policy parameter"
   }
   assert {
     condition     = aws_lambda_function_event_invoke_config.gatekeeper.maximum_retry_attempts == 0
@@ -129,7 +122,7 @@ run "prod_cannot_enable_remediation" {
       protected_resources = []
     }
   }
-  expect_failures = [aws_ssm_parameter.policy]
+  expect_failures = [aws_lambda_function.gatekeeper]
 }
 
 run "allowlist_for_other_account_rejected" {
@@ -154,13 +147,5 @@ run "allowlist_for_other_account_rejected" {
       }]
     }
   }
-  expect_failures = [aws_ssm_parameter.policy]
-}
-
-run "approver_must_be_iam_principal" {
-  command = plan
-  variables {
-    approvers = ["someone@example.com"]
-  }
-  expect_failures = [var.approvers]
+  expect_failures = [aws_lambda_function.gatekeeper]
 }

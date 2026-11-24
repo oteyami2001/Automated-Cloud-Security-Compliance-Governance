@@ -11,8 +11,8 @@ digest-bound apply, typed-confirmation cleanup).
 |---|---|---|---|---|
 | `ci.yml` | `pull_request`, `push` to `main` | **None** | — | pytest (+ coverage), Ruff (lint + format), Bandit, catalog validation, docs-sync checks, `terraform fmt -check`, `terraform validate`, `terraform test` (mock providers), TFLint (aws ruleset), Checkov, Trivy (config + secret + vuln), gitleaks, actionlint + zizmor (Actions security), Dependency review |
 | `security-scan.yml` | weekly schedule + manual | None | — | Full-history secret scan, Trivy fs, zizmor. SARIF upload to code scanning |
-| `terraform-plan.yml` | manual (`workflow_dispatch`: env, mode apply/destroy) | `acscg-github-plan` (read-only) | `dev-plan` | Plan → plan guard (§3) → digest → summary with addresses/actions only |
-| `terraform-apply.yml` | manual (input: reviewed digest) | `acscg-github-apply` | `dev` (required reviewer) | Re-plan → recompute digest → **fail closed** unless equal → apply the just-made plan file |
+| `terraform-plan.yml` ✅ (Phase 4) | manual (`workflow_dispatch`, dev only) | `acscg-github-dev-plan` (read-only + state lock file) | `dev-plan` | Build Lambda package → plan → plan guard (§3) → digest → job summary with addresses/actions only |
+| `terraform-apply.yml` ✅ (Phase 4) | manual (input: reviewed digest) | `acscg-github-dev-apply` | `dev` (required reviewer) | Build Lambda package → re-plan → recompute digest → **fail closed** unless equal → apply the just-made plan file |
 | `compliance-report.yml` | daily schedule + manual | `acscg-github-report` | — (`main` only) | Invoke report generator → download redacted Markdown summary → job summary |
 | `drift-detection.yml` | weekly schedule + manual | `acscg-github-plan` | `dev-plan` | `plan -detailed-exitcode`. Exit 2 → open/update an issue with addresses only. Never applies. Empty state → "not deployed" (Project 2 fix P8-5) |
 | `cleanup.yml` | manual (inputs: digest + `destroy-dev`) | `acscg-github-cleanup` | `dev-cleanup` (required reviewer) | Destroy plan digest check → destroy → `verify_cleanup.sh` (state empty, no `acscg-*` billable resources, **pre-existing services unchanged**) |
@@ -36,6 +36,23 @@ Runners: `ubuntu-24.04`. Every SHA is checked against the action's release tag w
 
 Pins are the newest releases at least 14 days old (supply-chain cooldown). Dependabot updates
 actions, pip and Terraform providers weekly with the same 14-day cooldown.
+
+### 1.2 Terraform plan/apply as implemented (Phase 4)
+
+- State: `s3://acscg-tfstate-<account>-us-east-2/stack/<env>/terraform.tfstate`, SSE-KMS
+  `alias/acscg-tfstate`, native S3 lock file (`scripts/tf_ci.sh` passes `-backend-config`).
+- Environment secrets (in both `dev-plan` and `dev`): `AWS_ACCOUNT_ID` (masked; also masked by
+  `configure-aws-credentials`) and `ALERT_EMAIL`. Never committed, never printed.
+- `aws-actions/configure-aws-credentials` pinned to `e1253824e5c10ff9df46874f81ed3ec929e19cfd`
+  (v6.3.0, released 2026-09-15; verified with `git ls-remote` and the tag's commit).
+- Both workflows run from `main` only (environment branch policy). The apply job waits for the
+  owner's approval of the `dev` environment, then applies only if the re-plan's digest equals the
+  digest the owner reviewed from the plan run.
+- Checkov CKV_GHA_7 (no `workflow_dispatch` inputs) is suppressed for `terraform-apply.yml` only:
+  the digest does not change what is built, it only gates the apply. Registered in
+  `policies/exceptions/scanner-exceptions.yaml`.
+- `tests/unit/test_phase4_workflows.py` asserts roles, environments, permissions, SHA pins,
+  masking, no expressions inside `run:` and the backend settings.
 
 ## 2. Identity (OIDC)
 

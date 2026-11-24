@@ -82,6 +82,18 @@ All results below were produced in the build environment without AWS credentials
 | P3-8 | Cost-allocation tag `Project` | `not found` at 13:18 UTC: new tags can take up to 24 h to appear, and in an Organization activation is usually done from the management account. Until active, the account-wide `aiops-account-monthly` budget (USD 30) is the backstop | ⏳ |
 | P3-9 | Issue found during the run | CloudShell's 1 GB home cannot hold the ~700 MB AWS provider (`no space left on device`). Fixed: `bootstrap.sh` keeps `.terraform` in `/tmp` via `TF_DATA_DIR` | ✅ |
 
+## Phase 4: security monitoring (approved 2026-11-24)
+
+| ID | Item | Evidence | Status |
+|---|---|---|---|
+| P4-1 | Config managed rule identifiers verified | 18/18 identifiers exist in the AWS Config developer guide (archived `awsdocs/aws-config-developer-guide`, commit 80500dbb). Corrections: `CW_LOGGROUP_RETENTION_PERIOD_CHECK` is periodic (scope removed) and treats "Never expire" as COMPLIANT (new custom check `log_retention_set`, rule `acscg-sec014-retention-set`); `REQUIRED_TAGS` does not support Lambda functions (removed from SEC-013). `docs/compliance-mapping.md` §6 | ✅ |
+| P4-2 | Security Hub control IDs | Secondary sources only (AWS docs archive empty): 21/24 found in Prowler FSBP and Steampipe; EC2.53, EC2.54, CloudWatch.16 pending. Security Hub is SCP-denied, so mapping only | ⚠️ |
+| P4-3 | Phase scope | Remediation module (Phase 6) and scenario fixtures off in dev (`enable_remediation = false`, `enable_test_fixtures = false`). Platform policy parameter moved to the stack (report-only). Tested: `stack.tftest.hcl`, `environments.tftest.hcl` (prod never deploys remediation) | ✅ |
+| P4-4 | Bootstrap least privilege | Plan role may write only `*.tflock` in the state bucket. Boundary allows the read-only S3/Logs/DynamoDB calls the Config recorder needs. `bootstrap.tftest.hcl`. Owner re-applies via `bootstrap.sh` (S3 state is used automatically) | ✅ offline, ⏳ apply |
+| P4-5 | Plan/apply workflows | `terraform-plan.yml`, `terraform-apply.yml` (OIDC, environment-gated, digest-bound). actionlint, zizmor (0 findings), Checkov (1 registered suppression), `test_phase4_workflows.py` | ✅ |
+| P4-6 | Offline checks for this change set | `make check`: 235 tests, coverage ≥ 90 %; `make terraform`: all module, bootstrap, stack and per-environment tests pass; TFLint 0 issues; Checkov 0 failed; Trivy 0 misconfigurations/secrets (2026-11-24) | ✅ |
+| P4-7 | Dev deployment | Pending: owner bootstrap update → secrets → plan run (digest review) → apply run (owner approval) → verification | ⏳ |
+
 ## Validation scenarios (Phase 9 target)
 
 See `docs/validation-scenarios.md`. Rows are filled in only as each scenario runs.

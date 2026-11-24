@@ -30,17 +30,19 @@ locals {
     "sec013-required-tags" = {
       control    = "SEC-013"
       identifier = "REQUIRED_TAGS"
-      types      = ["AWS::S3::Bucket", "AWS::EC2::SecurityGroup", "AWS::EC2::Volume", "AWS::EC2::Instance", "AWS::DynamoDB::Table", "AWS::Lambda::Function"]
+      types      = ["AWS::S3::Bucket", "AWS::EC2::SecurityGroup", "AWS::EC2::Volume", "AWS::EC2::Instance", "AWS::DynamoDB::Table"] # REQUIRED_TAGS does not support Lambda
       params     = { tag1Key = "Project", tag2Key = "Environment", tag3Key = "Owner", tag4Key = "ManagedBy", tag5Key = "DataClassification" }
     }
-    "sec014-log-retention" = { control = "SEC-014", identifier = "CW_LOGGROUP_RETENTION_PERIOD_CHECK", types = ["AWS::Logs::LogGroup"], params = { MinRetentionTime = tostring(var.min_log_retention_days) } }
+    # Periodic rule (no scope). It treats "Never expire" as COMPLIANT; the custom sec014-retention-set rule covers that.
+    "sec014-log-retention" = { control = "SEC-014", identifier = "CW_LOGGROUP_RETENTION_PERIOD_CHECK", types = [], params = { MinRetentionTime = tostring(var.min_log_retention_days) } }
   }
 
   enabled_managed = { for k, r in local.managed_rules : k => r if contains(var.enabled_controls, r.control) }
 
   custom_rules = !var.enable_custom_rules ? {} : {
-    "sec005-admin-port-custom" = { control = "SEC-005", params = { check = "open_admin_port", controlId = "SEC-005" } }
-    "sec006-admin-port-custom" = { control = "SEC-006", params = { check = "open_admin_port", controlId = "SEC-006" } }
+    "sec005-admin-port-custom" = { control = "SEC-005", types = ["AWS::EC2::SecurityGroup"], params = { check = "open_admin_port", controlId = "SEC-005" } }
+    "sec006-admin-port-custom" = { control = "SEC-006", types = ["AWS::EC2::SecurityGroup"], params = { check = "open_admin_port", controlId = "SEC-006" } }
+    "sec014-retention-set"     = { control = "SEC-014", types = ["AWS::Logs::LogGroup"], params = { check = "log_retention_set", minRetentionDays = tostring(var.min_log_retention_days) } }
   }
   enabled_custom = { for k, r in local.custom_rules : k => r if contains(var.enabled_controls, r.control) }
 }
@@ -268,7 +270,7 @@ resource "aws_config_config_rule" "custom" {
   input_parameters = jsonencode(each.value.params)
 
   scope {
-    compliance_resource_types = ["AWS::EC2::SecurityGroup"]
+    compliance_resource_types = each.value.types
   }
 
   depends_on = [aws_lambda_permission.config, aws_config_configuration_recorder_status.this]

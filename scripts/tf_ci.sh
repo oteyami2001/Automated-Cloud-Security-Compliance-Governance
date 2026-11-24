@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Terraform CI wrapper for the stack (ADR 0008). Used by the GitHub workflows in Phase 8.
+# Terraform CI wrapper for the stack (ADR 0008). Used by terraform-plan.yml and terraform-apply.yml.
+# State: s3://acscg-tfstate-<account>-<region>/stack/<env>/terraform.tfstate (bootstrap bucket,
+# SSE-KMS alias/acscg-tfstate, native S3 lock file).
 #
 #   tf_ci.sh plan    <env> [apply|destroy]   plan → guard → digest (addresses/actions only)
 #   tf_ci.sh apply   <env> [apply|destroy]   re-plan → guard → digest must equal $EXPECTED_DIGEST → apply that plan
@@ -27,6 +29,22 @@ if [ "$MODE" = destroy ] && [ "$CMD" = apply ] && [ "${CONFIRM_DESTROY:-}" != "d
   exit 2
 fi
 
+REGION=${AWS_REGION:-us-east-2}
+[[ $REGION =~ ^[a-z]{2}-[a-z]+-[0-9]$ ]] || { echo "::error::invalid AWS_REGION"; exit 2; }
+
+init() {
+  terraform -chdir="$STACK" init -input=false -no-color -reconfigure \
+    -backend-config="bucket=acscg-tfstate-${TF_VAR_aws_account_id}-${REGION}" \
+    -backend-config="key=stack/${ENV}/terraform.tfstate" \
+    -backend-config="region=${REGION}" \
+    -backend-config="encrypt=true" \
+    -backend-config="kms_key_id=alias/acscg-tfstate" \
+    -backend-config="use_lockfile=true" >"$WORK/init.log" 2>&1 || {
+    grep -E '^(Error|│)' "$WORK/init.log" | sed -E 's/[0-9]{12}/***/g' | head -40
+    return 1
+  }
+}
+
 plan() {
   local extra=()
   [ "$MODE" = destroy ] && extra+=(-destroy)
@@ -36,7 +54,10 @@ plan() {
     return 1
   }
   terraform -chdir="$STACK" show -json "$WORK/tfplan" >"$WORK/plan.json"
+  grep -E '^Plan:|^No changes' "$WORK/plan.log" || true
 }
+
+init
 
 case "$CMD" in
   plan)
@@ -44,6 +65,16 @@ case "$CMD" in
     python3 "$ROOT/scripts/plan_guard.py" check "$WORK/plan.json" --mode "$MODE" | tee "$WORK/guard.txt"
     DIGEST=$(sed -n 's/^digest=//p' "$WORK/guard.txt")
     if [ -n "${GITHUB_OUTPUT:-}" ]; then echo "digest=$DIGEST" >>"$GITHUB_OUTPUT"; fi
+    if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+      {
+        echo "### Terraform plan: $ENV ($MODE)"
+        echo '```'
+        grep -E '^Plan:' "$WORK/plan.log" || true
+        grep -v '^digest=' "$WORK/guard.txt" | sed -E 's/[0-9]{12}/***/g'
+        echo '```'
+        echo "Digest for terraform-apply: \`$DIGEST\`"
+      } >>"$GITHUB_STEP_SUMMARY"
+    fi
     ;;
   apply)
     [[ ${EXPECTED_DIGEST:-} =~ ^[0-9a-f]{64}$ ]] || { echo "::error::EXPECTED_DIGEST must be 64 lowercase hex"; exit 2; }

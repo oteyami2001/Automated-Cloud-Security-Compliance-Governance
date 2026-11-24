@@ -14,6 +14,14 @@ locals {
     { Sid = "StateKey", Effect = "Allow", Action = ["kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey"], Resource = aws_kms_key.state.arn },
   ]
 
+  # The plan role reads state and may only create/remove the native S3 lock file (use_lockfile).
+  plan_state_access = [
+    { Sid = "StateList", Effect = "Allow", Action = "s3:ListBucket", Resource = local.state_arn },
+    { Sid = "StateRead", Effect = "Allow", Action = "s3:GetObject", Resource = "${local.state_arn}/*" },
+    { Sid = "StateLockOnly", Effect = "Allow", Action = ["s3:PutObject", "s3:DeleteObject"], Resource = "${local.state_arn}/*.tflock" },
+    { Sid = "StateKey", Effect = "Allow", Action = ["kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey"], Resource = aws_kms_key.state.arn },
+  ]
+
   deny_guardrails = [
     {
       Sid      = "NeverTouchOtherProjectsOrSharedIdentity"
@@ -91,7 +99,7 @@ locals {
 
   plan_policy = {
     Version = "2012-10-17"
-    Statement = concat(local.state_access, local.deny_guardrails, [
+    Statement = concat(local.plan_state_access, local.deny_guardrails, [
       { Sid = "DecryptProjectSecureStrings", Effect = "Allow", Action = "kms:Decrypt", Resource = "*", Condition = { StringEquals = { "aws:ResourceTag/Project" = "acscg" } } },
       { Sid = "ReadProjectParameters", Effect = "Allow", Action = ["ssm:GetParameter", "ssm:GetParameters"], Resource = "${local.arn}:ssm:${local.r}:${local.a}:parameter/acscg/*" },
     ])

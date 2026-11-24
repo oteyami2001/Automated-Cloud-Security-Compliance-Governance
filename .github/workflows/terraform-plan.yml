@@ -1,0 +1,53 @@
+# Terraform plan for the workload stack (ADR 0008). Read-only role, OIDC, no stored AWS keys.
+# Prints only planned addresses/actions and the digest; the plan file never leaves the runner.
+# The reviewed digest is the input of terraform-apply.yml. Runs from main only (environment dev-plan).
+name: terraform-plan
+
+on:
+  workflow_dispatch: # dev only for now; staging/prod are reference configurations (ADR 0002)
+
+permissions: {}
+
+concurrency:
+  group: terraform-dev
+  cancel-in-progress: false
+
+env:
+  TERRAFORM_VERSION: "1.17.2"
+  AWS_REGION: us-east-2
+
+jobs:
+  plan:
+    name: plan (dev)
+    runs-on: ubuntu-24.04
+    environment: dev-plan
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      - name: Install pinned, hash-verified dependencies
+        run: python -m pip install --require-hashes --no-deps -r requirements-dev.lock
+      - name: Build the Lambda package (reproducible)
+        run: python scripts/build_lambda.py
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/acscg-github-dev-plan
+          role-session-name: acscg-plan-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+      - name: Plan, guard and digest
+        env:
+          TF_VAR_aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
+          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
+          TF_IN_AUTOMATION: "1"
+        run: bash scripts/tf_ci.sh plan dev apply

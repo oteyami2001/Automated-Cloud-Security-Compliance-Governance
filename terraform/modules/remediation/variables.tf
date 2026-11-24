@@ -32,33 +32,9 @@ variable "policy_parameter_name" {
   type = string
 }
 
-variable "approvers" {
-  description = "IAM principal ARNs allowed to approve Mode 3 requests (TF_VAR, never committed)."
-  type        = list(string)
-  default     = []
-  sensitive   = true
-  validation {
-    condition     = alltrue([for a in var.approvers : can(regex("^arn:aws[a-z-]*:iam::[0-9]{12}:(role|user)/", a))])
-    error_message = "approvers must be IAM role or user ARNs."
-  }
-}
-
-variable "project_inventory" {
-  description = "ARNs of resources created by this project (Terraform state), used for ownership checks."
-  type        = list(string)
-  default     = []
-}
-
-variable "approved_change_principals" {
-  description = "Principals whose changes are authorised (Terraform apply role, runbook execution roles)."
-  type        = list(string)
-  default     = []
-}
-
-variable "project_role_arns" {
-  description = "CI and automation roles: never allowed as approvers (separation of duties)."
-  type        = list(string)
-  default     = []
+variable "policy_parameter_arn" {
+  description = "ARN of the platform policy SecureString parameter (owned by the stack)."
+  type        = string
 }
 
 variable "table_name" {

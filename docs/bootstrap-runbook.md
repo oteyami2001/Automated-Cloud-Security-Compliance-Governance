@@ -1,6 +1,6 @@
 # Bootstrap runbook
 
-**Status: §1 done (2026-11-24). §2 and §2a done and verified 2026-11-24 (evidence P3-4…P3-7). Remaining: cost-allocation tag (P3-8).**
+**Status: §1 done (2026-11-24). §2 and §2a done and verified 2026-11-24 (evidence P3-4…P3-7). Remaining: cost-allocation tag (P3-8). §5 (Phase 4) ready after the Phase 4 PR is merged.**
 
 ## 1. Phase 0: read-only discovery in AWS CloudShell (run now)
 
@@ -126,3 +126,69 @@ Otherwise the CI roles' trust policies (immutable IDs) will not match and must b
 
 `terraform destroy` of the bootstrap only after workload cleanup is verified. The state bucket
 and KMS key have `prevent_destroy`, and are removed manually after an explicit owner decision.
+
+## 5. Phase 4: first workload deployment (dev, report-only)
+
+What is deployed: AWS Config recorder (catalog resource types only) and delivery bucket, 18 managed
+and 3 custom Config rules, EventBridge rules, findings processor / Config evaluator / report
+Lambdas, DynamoDB table, DLQ, encrypted SNS topic (e-mail), evidence bucket (Object Lock
+GOVERNANCE, 7 days), KMS key, platform policy parameter (report-only), dashboard and alarms.
+**Not** deployed: remediation (Phase 6), scenario fixtures, Security Hub, GuardDuty, Access Analyzer
+(all SCP-denied or later phases), any trail (the existing one is only referenced).
+
+**Step 1: update the bootstrap (CloudShell, us-east-2).** Two least-privilege changes: the plan
+role may only write the state lock file, and the workload boundary allows the read-only calls the
+Config recorder needs. `bootstrap.sh plan` now finds the S3 state by itself.
+
+```bash
+cd ~ && rm -rf acscg-phase4 && git clone --depth 1 https://github.com/oteyami2001/Automated-Cloud-Security-Compliance-Governance.git acscg-phase4 && cd acscg-phase4
+```
+
+```bash
+bash scripts/install_terraform.sh && export PATH=$HOME/bin:$PATH
+```
+
+```bash
+export TF_VAR_aws_account_id=$(aws sts get-caller-identity --query Account --output text)
+```
+
+```bash
+export TF_VAR_alert_email="you@example.com"
+```
+
+```bash
+bash scripts/bootstrap.sh plan
+```
+
+Expected: `Using the S3 state`, then `Plan: 0 to add, 2 to change, 0 to destroy.` (the boundary
+policy and the dev-plan inline policy). Share the output. After approval:
+
+```bash
+bash scripts/bootstrap.sh apply <digest>
+```
+
+```bash
+bash scripts/bootstrap.sh verify
+```
+
+**Step 2: environment secrets (once).** In GitHub: Settings → Environments → `dev-plan` → Add
+environment secret, then the same for `dev`:
+
+| Secret | Value |
+|---|---|
+| `AWS_ACCOUNT_ID` | the 12-digit account ID |
+| `ALERT_EMAIL` | the address for security alerts (an SNS confirmation e-mail follows the apply) |
+
+**Step 3: plan.** Actions → `terraform-plan` → Run workflow (branch `main`). The job summary lists
+planned addresses/actions and the digest, with no values. Share the run link for review.
+
+**Step 4: apply, only after the plan is reviewed and approved.** Actions → `terraform-apply` → Run
+workflow with the reviewed digest. Approve the `dev` deployment when GitHub asks. The job re-plans
+and stops unless the digest is identical.
+
+**Step 5: confirm the SNS subscription e-mail.** Then verification follows (Config rules evaluating,
+processor receiving events, findings in DynamoDB), recorded in `docs/portfolio-evidence.md`.
+
+Rollback: Config recording and rules can be stopped by a reviewed destroy plan (Phase 9 cleanup
+workflow). The state, evidence bucket and keys are protected and are never removed by Phase 4.
+

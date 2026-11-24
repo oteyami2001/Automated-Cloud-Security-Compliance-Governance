@@ -46,6 +46,16 @@ variable "approvers" {
   type        = list(string)
   default     = []
   sensitive   = true
+  validation {
+    condition     = alltrue([for a in var.approvers : can(regex("^arn:aws[a-z-]*:iam::[0-9]{12}:(role|user)/", a))])
+    error_message = "approvers must be IAM role or user ARNs."
+  }
+}
+
+variable "enable_remediation" {
+  description = "Deploy the remediation module (gatekeeper, SSM documents, execution roles). Phase 6; off until then."
+  type        = bool
+  default     = false
 }
 
 variable "config_ownership_mode" {

@@ -1,5 +1,6 @@
 # Permissions boundary for every workload role the stack creates (Lambda, runbook execution,
-# Config recorder). It allows only the services the platform uses and explicitly denies the
+# Config recorder). The read-only S3/Logs/DynamoDB calls in ReadAndScopedRemediation are what the
+# Config recorder (AWS_ConfigRole) uses to record the catalog's resource types. It allows only the services the platform uses and explicitly denies the
 # changes the platform must never make (docs/security-model.md §2 and §6).
 
 locals {
@@ -48,7 +49,7 @@ resource "aws_iam_policy" "workload_boundary" {
       {
         Sid      = "ReadAndScopedRemediation"
         Effect   = "Allow"
-        Action   = ["ssm:GetAutomationExecution", "ssm:StartAutomationExecution", "ssm:AddTagsToResource", "config:*", "ec2:Describe*", "ec2:RevokeSecurityGroupIngress", "ec2:AuthorizeSecurityGroupIngress", "ec2:ModifyInstanceMetadataOptions", "ec2:CreateTags", "ec2:DeleteTags", "tag:*", "cloudtrail:Describe*", "cloudtrail:Get*", "cloudtrail:List*", "iam:Get*", "iam:List*", "iam:PassRole", "lambda:Get*", "lambda:List*", "logs:Describe*", "s3:GetAccountPublicAccessBlock", "s3:GetBucket*", "s3:GetEncryptionConfiguration", "s3:GetLifecycleConfiguration", "s3:GetReplicationConfiguration", "s3:ListAllMyBuckets", "dynamodb:Describe*", "dynamodb:ListTables", "xray:PutTraceSegments", "xray:PutTelemetryRecords", "sts:GetCallerIdentity"]
+        Action   = ["ssm:GetAutomationExecution", "ssm:StartAutomationExecution", "ssm:AddTagsToResource", "config:*", "ec2:Describe*", "ec2:RevokeSecurityGroupIngress", "ec2:AuthorizeSecurityGroupIngress", "ec2:ModifyInstanceMetadataOptions", "ec2:CreateTags", "ec2:DeleteTags", "tag:*", "cloudtrail:Describe*", "cloudtrail:Get*", "cloudtrail:List*", "iam:Get*", "iam:List*", "iam:PassRole", "lambda:Get*", "lambda:List*", "logs:Describe*", "s3:GetAccountPublicAccessBlock", "s3:GetBucket*", "s3:GetEncryptionConfiguration", "s3:GetLifecycleConfiguration", "s3:GetReplicationConfiguration", "s3:GetAccelerateConfiguration", "s3:GetAnalyticsConfiguration", "s3:GetIntelligentTieringConfiguration", "s3:GetInventoryConfiguration", "s3:GetMetricsConfiguration", "s3:ListAllMyBuckets", "logs:ListTagsForResource", "logs:ListTagsLogGroup", "dynamodb:Describe*", "dynamodb:ListTables", "dynamodb:ListTagsOfResource", "xray:PutTraceSegments", "xray:PutTelemetryRecords", "sts:GetCallerIdentity"]
         Resource = "*" # the boundary is a ceiling: each role policy scopes these to exact ARNs (tested)
       },
       {

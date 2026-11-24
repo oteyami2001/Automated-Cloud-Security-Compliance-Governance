@@ -1,0 +1,64 @@
+# Apply the reviewed plan (ADR 0008). Runs only after the owner approves the environment
+# deployment. It re-plans, and applies only when the new plan's digest equals the reviewed digest;
+# any difference (code, variables, or drift in AWS) stops it before a single change.
+name: terraform-apply
+
+on:
+  workflow_dispatch: # checkov:skip=CKV_GHA_7:The digest input does not change what is built; it only gates the apply (must match the re-plan, ADR 0008).
+    inputs:
+      digest:
+        description: Digest from the reviewed terraform-plan run (64 hex characters)
+        type: string
+        required: true
+
+permissions: {}
+
+concurrency:
+  group: terraform-dev
+  cancel-in-progress: false
+
+env:
+  TERRAFORM_VERSION: "1.17.2"
+  AWS_REGION: us-east-2
+
+jobs:
+  apply:
+    name: apply (dev)
+    runs-on: ubuntu-24.04
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Digest format
+        env:
+          EXPECTED_DIGEST: ${{ inputs.digest }}
+        run: |
+          [[ $EXPECTED_DIGEST =~ ^[0-9a-f]{64}$ ]] || { echo "::error::digest must be 64 lowercase hex characters"; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      - name: Install pinned, hash-verified dependencies
+        run: python -m pip install --require-hashes --no-deps -r requirements-dev.lock
+      - name: Build the Lambda package (reproducible)
+        run: python scripts/build_lambda.py
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/acscg-github-dev-apply
+          role-session-name: acscg-apply-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+      - name: Re-plan, verify digest, apply that plan
+        env:
+          TF_VAR_aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
+          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
+          TF_IN_AUTOMATION: "1"
+          EXPECTED_DIGEST: ${{ inputs.digest }}
+        run: bash scripts/tf_ci.sh apply dev apply

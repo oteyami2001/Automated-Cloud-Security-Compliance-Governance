@@ -39,7 +39,8 @@
      "S3.3",
      "S3.8"
     ],
-    "verification": "pending"
+    "securityhub_verification": "secondary-source",
+    "verification": "verified"
    },
    "domain": "data-protection",
    "evaluation_logic": "NON_COMPLIANT if any of the four bucket-level Block Public Access settings is false, or if the effective bucket policy or ACL grants Principal \"*\" or the AllUsers/AuthenticatedUsers groups without a restricting condition. The account-level block is evaluated separately and reported, but never changed by this platform.",
@@ -123,7 +124,8 @@
     "securityhub_controls": [
      "S3.17"
     ],
-    "verification": "pending"
+    "securityhub_verification": "secondary-source",
+    "verification": "verified"
    },
    "domain": "data-protection",
    "evaluation_logic": "NON_COMPLIANT if no default encryption rule exists, or if the bucket is tagged DataClassification in {confidential, restricted} and the default algorithm is not aws:kms. The classification tag only selects the stricter rule; it never relaxes it.",
@@ -182,7 +184,8 @@
     "securityhub_controls": [
      "S3.14"
     ],
-    "verification": "pending"
+    "securityhub_verification": "secondary-source",
+    "verification": "verified"
    },
    "domain": "data-protection",
    "evaluation_logic": "NON_COMPLIANT if the versioning status is not Enabled",
@@ -241,7 +244,8 @@
     "securityhub_controls": [
      "S3.5"
     ],
-    "verification": "pending"
+    "securityhub_verification": "secondary-source",
+    "verification": "verified"
    },
    "domain": "data-protection",
    "evaluation_logic": "NON_COMPLIANT unless the bucket policy has an explicit Deny on s3:* for all principals when aws:SecureTransport is false",
@@ -308,7 +312,8 @@
      "EC2.53",
      "EC2.54"
     ],
-    "verification": "pending"
+    "securityhub_verification": "pending",
+    "verification": "verified"
    },
    "domain": "network-security",
    "evaluation_logic": "NON_COMPLIANT if any ingress permission with IpProtocol tcp or -1 has a port range that includes 22 and a source of 0.0.0.0/0 or ::/0.",
@@ -398,7 +403,8 @@
      "EC2.53",
      "EC2.54"
     ],
-    "verification": "pending"
+    "securityhub_verification": "pending",
+    "verification": "verified"
    },
    "domain": "network-security",
    "evaluation_logic": "NON_COMPLIANT if any ingress permission (tcp or -1) covering port 3389 has source 0.0.0.0/0 or ::/0",
@@ -477,7 +483,8 @@
      "EC2.3",
      "EC2.7"
     ],
-    "verification": "pending"
+    "securityhub_verification": "secondary-source",
+    "verification": "verified"
    },
    "domain": "data-protection",
    "evaluation_logic": "NON_COMPLIANT if a volume has Encrypted=false, or if GetEbsEncryptionByDefault is false in the Region",
@@ -542,7 +549,8 @@
     "securityhub_controls": [
      "EC2.8"
     ],
-    "verification": "pending"
+    "securityhub_verification": "secondary-source",
+    "verification": "verified"
    },
    "domain": "compute-security",
    "evaluation_logic": "NON_COMPLIANT if MetadataOptions.HttpTokens is optional and the endpoint is enabled",
@@ -620,7 +628,8 @@
      "IAM.5",
      "IAM.19"
     ],
-    "verification": "pending"
+    "securityhub_verification": "secondary-source",
+    "verification": "verified"
    },
    "domain": "identity-access",
    "evaluation_logic": "NON_COMPLIANT if the user has a login profile and zero MFA devices",
@@ -687,7 +696,8 @@
      "IAM.1",
      "IAM.21"
     ],
-    "verification": "pending"
+    "securityhub_verification": "secondary-source",
+    "verification": "verified"
    },
    "domain": "identity-access",
    "evaluation_logic": "NON_COMPLIANT if an attached, customer-managed policy version has an Allow statement with Action \"*\" (or \"*:*\") and Resource \"*\". Service-level wildcards are flagged for review (medium). AWS managed policies are reported only by attachment.",
@@ -761,7 +771,8 @@
      "IAM.3",
      "IAM.22"
     ],
-    "verification": "pending"
+    "securityhub_verification": "secondary-source",
+    "verification": "verified"
    },
    "domain": "identity-access",
    "evaluation_logic": "NON_COMPLIANT if an active key is older than 90 days, unused for 45 days or more, or the user has two active keys",
@@ -840,7 +851,8 @@
      "CloudTrail.2",
      "CloudTrail.4"
     ],
-    "verification": "pending"
+    "securityhub_verification": "secondary-source",
+    "verification": "verified"
    },
    "domain": "logging-monitoring",
    "evaluation_logic": "NON_COMPLIANT if no trail with IsLogging=true covers the Region, or log file validation is off. MULTI_REGION_CLOUD_TRAIL_ENABLED is reported as informational: the existing trail is single-Region by design because an SCP denies the other US Region (to be confirmed in discovery).",
@@ -918,7 +930,7 @@
      "tag5Key": "DataClassification"
     },
     "method": "config_managed_rule",
-    "verification": "pending"
+    "verification": "verified"
    },
    "domain": "governance",
    "evaluation_logic": "NON_COMPLIANT if any required tag key is missing. Values are validated by the custom evaluator against the allowed-values list in policies/.",
@@ -969,8 +981,7 @@
     "AWS::EC2::SecurityGroup",
     "AWS::EC2::Volume",
     "AWS::EC2::Instance",
-    "AWS::DynamoDB::Table",
-    "AWS::Lambda::Function"
+    "AWS::DynamoDB::Table"
    ],
    "severity": "low",
    "title": "Required resource tags",
@@ -992,11 +1003,13 @@
     "config_rule_parameters": {
      "MinRetentionTime": "30"
     },
+    "custom_evaluator": "src/compliance_evaluator (log_retention_set; the managed rule treats \"Never expire\" as COMPLIANT)",
     "method": "config_managed_rule",
     "securityhub_controls": [
      "CloudWatch.16"
     ],
-    "verification": "pending"
+    "securityhub_verification": "pending",
+    "verification": "verified"
    },
    "domain": "logging-monitoring",
    "evaluation_logic": "NON_COMPLIANT if retentionInDays is unset (never expire) or below the environment minimum",
