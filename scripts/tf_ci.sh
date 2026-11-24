@@ -36,7 +36,8 @@ redact() {
   sed -E -e 's/[0-9]{12}/***/g' \
     -e 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/<email>/g' \
     -e 's/\b(vpc|sg|sgr|subnet|igw|eni|vol|i|ami|snap|rtb|acl|nat|vpce)-[0-9a-f]{8,17}\b/\1-<id>/g' \
-    -e 's/(Encoded authorization failure message:) [A-Za-z0-9_-]+/\1 <removed>/g'
+    -e 's/(Encoded authorization failure message:) [A-Za-z0-9_-]+/\1 <removed>/g' \
+    -e 's/[A-Za-z0-9_-]{100,}/<removed>/g' # the same message when Terraform wraps it onto its own line
 }
 
 init() {

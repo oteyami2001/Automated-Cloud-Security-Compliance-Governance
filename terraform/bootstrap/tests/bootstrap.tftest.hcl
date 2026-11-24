@@ -91,6 +91,10 @@ run "bootstrap_guardrails" {
     condition     = [for st in jsondecode(output.ci_role_policies["dev-apply"]).Statement : st.Condition.StringEquals["aws:ResourceTag/Project"] if st.Sid == "FixtureSecurityGroupInProjectVpc"][0] == "acscg"
     error_message = "security groups may be created only inside project-tagged VPCs"
   }
+  assert {
+    condition     = [for st in jsondecode(output.ci_role_policies["dev-apply"]).Statement : st.Condition.StringEquals["aws:RequestTag/Project"] if st.Sid == "FixtureSecurityGroupRulesTagged"][0] == "acscg"
+    error_message = "new security group rules must be tagged Project=acscg on creation"
+  }
 }
 
 run "other_regions_rejected" {

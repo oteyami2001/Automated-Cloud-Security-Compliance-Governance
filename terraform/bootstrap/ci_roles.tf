@@ -92,6 +92,9 @@ locals {
     { Sid = "FixtureNetwork", Effect = "Allow", Action = ["ec2:CreateVpc", "ec2:CreateSecurityGroup", "ec2:CreateTags"], Resource = "*", Condition = { StringEquals = { "aws:RequestTag/Project" = "acscg" } } },
     # CreateSecurityGroup is also authorised against the VPC it is created in, and that resource
     # carries no request tags. Allow it only for VPCs that are themselves tagged Project=acscg.
+    # Rules created with aws_vpc_security_group_*_rule are their own resource (security-group-rule/*)
+    # and carry no tags until created: allow creating them only when the request tags them.
+    { Sid = "FixtureSecurityGroupRulesTagged", Effect = "Allow", Action = ["ec2:AuthorizeSecurityGroupIngress", "ec2:AuthorizeSecurityGroupEgress"], Resource = "${local.arn}:ec2:${local.r}:${local.a}:security-group-rule/*", Condition = { StringEquals = { "aws:RequestTag/Project" = "acscg" } } },
     { Sid = "FixtureSecurityGroupInProjectVpc", Effect = "Allow", Action = "ec2:CreateSecurityGroup", Resource = "${local.arn}:ec2:${local.r}:${local.a}:vpc/*", Condition = { StringEquals = { "aws:ResourceTag/Project" = "acscg" } } },
     { Sid = "FixtureNetworkManage", Effect = "Allow", Action = ["ec2:DeleteVpc", "ec2:DeleteSecurityGroup", "ec2:AuthorizeSecurityGroupIngress", "ec2:RevokeSecurityGroupIngress", "ec2:AuthorizeSecurityGroupEgress", "ec2:RevokeSecurityGroupEgress", "ec2:ModifySecurityGroupRules", "ec2:ModifyVpcAttribute", "ec2:DeleteTags"], Resource = "*", Condition = { StringEquals = { "aws:ResourceTag/Project" = "acscg" } } },
     { Sid = "Ec2Read", Effect = "Allow", Action = ["ec2:Describe*"], Resource = "*" },
