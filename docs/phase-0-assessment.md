@@ -1,7 +1,7 @@
 # Phase 0: repository and AWS environment assessment
 
 - **Date:** 2026-11-24
-- **Status:** Repository assessment complete. AWS discovery **not yet run** (blocked, see §2).
+- **Status:** Repository assessment complete. AWS discovery **run by the owner in CloudShell on 2026-11-24T06:21:46Z** (§2.4). Account and Region confirmation pending (B1).
 - **Scope:** read-only. No AWS resource was created, changed or deleted. No AWS API call succeeded from
   the build environment.
 
@@ -77,6 +77,37 @@ does not assume the same account.** Your confirmation is required (blocker B1).
 | D11 | Budgets, month-to-date cost | `describe-budgets`, Cost Explorer | Budget count, cost baseline |
 | D12 | Quotas: Config rules per Region, Lambda concurrency, EventBridge rules | Service Quotas | Capacity |
 | D13 | Pre-existing open security groups, never-expire log groups, EBS default encryption | Describe calls | **Protected-resource list**: pre-existing violations are reported, never remediated |
+
+### 2.4 Discovery results (owner run, CloudShell us-east-2, 2026-11-24T06:21:46Z, redacted)
+
+Run as an administrator role from CloudShell. Read-only. The raw report stays with the owner.
+Identifiers are omitted here, including the Organizations management account. The script now
+redacts any 12-digit account ID, AWS unique IDs, session UUIDs and authorization IDs (the first
+version redacted only the caller's own account; fixed and tested).
+
+| # | Result | Decision / impact |
+|---|---|---|
+| D1 | Caller is the CloudShell admin role in the account used by Projects 1–2 (`aiops-*`/`idp-*` roles, buckets and budgets present) | Same account as ADR 0002 proposes. **Owner confirmation still required** |
+| D2/D3 | Organizations member (all features, SCPs enabled). **us-east-1: every regional call explicitly denied by an SCP.** `iam:ListAccountAliases` SCP-denied | us-east-2 only (confirmed by behaviour). IAM change events, which arrive in us-east-1, are unavailable (L1) |
+| D4 | Trail `idp-management-events`: home us-east-2, single-Region, **logging**, log file validation on, read+write management events, last delivery at the time of the run | `cloudtrail_mode = "integrate"`. No second trail (ADR 0005) |
+| D5 | **No Config recorder, delivery channel, rules, conformance packs or aggregators in us-east-2** | `config_ownership_mode = "create"` for dev: this project creates the only recorder, limited to catalog resource types, and removes it at cleanup |
+| D6 | **Security Hub CSPM: explicit SCP deny even for read calls (DescribeHub)** | Disabled. Never enabled or bypassed. CI roles no longer request Security Hub permissions |
+| D7 | **GuardDuty: explicit SCP deny (ListDetectors)** | Disabled. Scenario 16 is demonstrated with synthetic findings offline only |
+| D8 | **IAM Access Analyzer: explicit SCP deny (ListAnalyzers)** | No analyzer, and the Access Analyzer event rule is off. SEC-001/SEC-010 rely on Config rules |
+| D9 | OIDC provider `token.actions.githubusercontent.com` exists. No `acscg-*` roles. IAM: 0 users, 22 roles, 2 customer policies, no access keys | Look up the provider. No name collisions. SEC-009/011 have no users to evaluate (synthetic scenarios only) |
+| D10 | Buckets: `aiops-tfstate-…`, `idp-tfstate-…`, `idp-cloudtrail-…`. No `acscg-*` | `acscg-tfstate-…` is free. Other projects' buckets are protected by explicit denies |
+| D11 | Budgets: `aiops-account-monthly` (USD 30, account-wide), `idp-project-monthly` (USD 25, tag-filtered). Month-to-date cost: no service above USD 0.001 | Clean cost baseline. A third, tag-filtered `acscg` budget is added (a third budget may carry a small charge, unverified) |
+| D12 | Lambda concurrency 400. EventBridge rules quota 300. Config quotas not returned | Ample for the design |
+| D13 | Default VPC only, no EC2 instances, **no security group open to 0.0.0.0/0 or ::/0**, no log groups without retention. **Account-level S3 Block Public Access: not configured.** **EBS encryption by default: off** | Protected list stays empty. The scenario 4 fixture no longer relies on account-level BPA (ACLs disabled explicitly). Expect real report-only findings for SEC-001 (account level) and SEC-007 (default encryption) in Phase 4 |
+
+**Findings for the owner (outside this project's authority to change):**
+
+1. `AccountMFAEnabled = 0` in the IAM account summary (root user without MFA), unless root access
+   is managed centrally by the organization. Please confirm.
+2. No account-level S3 Block Public Access. Enabling it is an account-wide setting the platform will
+   detect (SEC-001) but never change.
+3. EBS encryption by default is off in us-east-2 (SEC-007, account-wide, report-only).
+4. No IAM password policy (low impact: there are no IAM users).
 
 ## 3. Security risks found in Phase 0
 

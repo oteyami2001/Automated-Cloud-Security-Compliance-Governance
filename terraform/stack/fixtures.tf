@@ -1,7 +1,8 @@
 # Isolated test fixtures for the validation scenarios (docs/validation-scenarios.md). Off by
 # default. Violations are separate flags, each off by default and reviewed in a plan before apply.
 # Nothing here is reachable from the internet: the VPC has no internet gateway, the security group
-# is attached to nothing, the bucket is empty and the account-level public access block stays on.
+# is attached to nothing, and the bucket is empty with ACLs disabled and a Deny-only bucket policy.
+# (The account has no account-level S3 public access block, discovery D13, so it is not relied on.)
 
 locals {
   fixtures = var.enable_test_fixtures ? 1 : 0
@@ -61,8 +62,18 @@ resource "aws_s3_bucket" "fixture" {
   force_destroy = true
 }
 
+resource "aws_s3_bucket_ownership_controls" "fixture" {
+  # ACLs disabled: with no account-level public access block in this account (discovery D13), the
+  # fixture's safety rests on no ACLs, an empty bucket and a Terraform-managed Deny-only policy.
+  count  = local.fixtures
+  bucket = aws_s3_bucket.fixture[0].id
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
 resource "aws_s3_bucket_public_access_block" "fixture" {
-  # checkov:skip=CKV_AWS_53:Scenario 4 can disable ONE setting on the empty fixture; account-level BPA still blocks public access.
+  # checkov:skip=CKV_AWS_53:Scenario 4 can disable ONE setting on the empty fixture; ACLs are disabled and the only bucket policy is a Terraform-managed Deny.
   # checkov:skip=CKV_AWS_54:Scenario 4 fixture, see above.
   # checkov:skip=CKV_AWS_55:Scenario 4 fixture, see above.
   # checkov:skip=CKV_AWS_56:Scenario 4 fixture, see above.

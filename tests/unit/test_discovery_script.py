@@ -44,7 +44,11 @@ def test_output_is_redacted_by_default(tmp_path: Path) -> None:
         "#!/usr/bin/env bash\n"
         'case "$*" in\n'
         '  *"get-caller-identity --query Account"*) echo 123456789012;;\n'
-        '  *) echo \'{"Arn":"arn:aws:iam::123456789012:role/x","Email":"a.b@example.com","Cidr":"203.0.113.7/32"}\';;\n'
+        '  *"--output text"*) echo "";;\n'  # loop queries (detectors, trails): nothing found
+        '  *) echo \'{"Arn":"arn:aws:iam::123456789012:role/x","Email":"a.b@example.com","Cidr":"203.0.113.7/32",'
+        '"Mgmt":"arn:aws:organizations::210987654321:account/o-abcdefghij12/210987654321","UserId":"AROAEXAMPLEROLEID1234:'
+        '11111111-2222-4333-8444-555555555555","Any":"0.0.0.0/0",'
+        '"Auth":"authorization id: abcdefghij0123456789klmno"}\';;\n'
         "esac\n",
         "utf-8",
     )
@@ -60,5 +64,15 @@ def test_output_is_redacted_by_default(tmp_path: Path) -> None:
     )
     out = result.stdout
     assert "<ACCOUNT_ID>" in out
-    for secret in ("123456789012", "a.b@example.com", "203.0.113.7"):
-        assert secret not in out
+    for secret in (
+        "123456789012",
+        "210987654321",  # another account (e.g. the Organizations management account)
+        "a.b@example.com",
+        "203.0.113.7",
+        "AROAEXAMPLEROLEID1234",
+        "11111111-2222-4333-8444-555555555555",
+        "o-abcdefghij12",
+        "abcdefghij0123456789klmno",
+    ):
+        assert secret not in out, secret
+    assert "0.0.0.0/0" in out  # security-relevant CIDR stays readable

@@ -84,9 +84,8 @@ locals {
     { Sid = "FixtureNetwork", Effect = "Allow", Action = ["ec2:CreateVpc", "ec2:CreateSecurityGroup", "ec2:CreateTags"], Resource = "*", Condition = { StringEquals = { "aws:RequestTag/Project" = "acscg" } } },
     { Sid = "FixtureNetworkManage", Effect = "Allow", Action = ["ec2:DeleteVpc", "ec2:DeleteSecurityGroup", "ec2:AuthorizeSecurityGroupIngress", "ec2:RevokeSecurityGroupIngress", "ec2:AuthorizeSecurityGroupEgress", "ec2:RevokeSecurityGroupEgress", "ec2:ModifySecurityGroupRules", "ec2:ModifyVpcAttribute", "ec2:DeleteTags"], Resource = "*", Condition = { StringEquals = { "aws:ResourceTag/Project" = "acscg" } } },
     { Sid = "Ec2Read", Effect = "Allow", Action = ["ec2:Describe*"], Resource = "*" },
-    # Optional integrations: used only when an approved window sets ownership_mode = "create".
-    { Sid = "OptionalSecurityServices", Effect = "Allow", Action = ["securityhub:EnableSecurityHub", "securityhub:DescribeHub", "securityhub:GetEnabledStandards", "securityhub:BatchEnableStandards", "securityhub:BatchDisableStandards", "securityhub:UpdateSecurityHubConfiguration", "securityhub:DisableSecurityHub", "guardduty:CreateDetector", "guardduty:GetDetector", "guardduty:UpdateDetector", "guardduty:DeleteDetector", "guardduty:ListDetectors", "guardduty:TagResource"], Resource = "*" },
-    { Sid = "AccessAnalyzer", Effect = "Allow", Action = ["access-analyzer:CreateAnalyzer", "access-analyzer:GetAnalyzer", "access-analyzer:ListAnalyzers", "access-analyzer:DeleteAnalyzer", "access-analyzer:TagResource"], Resource = "*" },
+    # Security Hub, GuardDuty and Access Analyzer are not granted: an SCP denies them in the target
+    # account (discovery 2026-11-24). Add them here only for an account where they are allowed.
     { Sid = "Identity", Effect = "Allow", Action = "sts:GetCallerIdentity", Resource = "*" },
   ]
 

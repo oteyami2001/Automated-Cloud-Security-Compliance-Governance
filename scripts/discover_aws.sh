@@ -29,10 +29,19 @@ ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/nu
 
 redact() {
   if [ "$REDACT" = "1" ]; then
+    # Own account, then ANY other 12-digit account ID (e.g. the Organizations management account),
+    # AWS unique IDs, session UUIDs, authorization IDs, e-mails, IPv4 (0.0.0.0/0 stays readable).
     sed -E \
       -e "s/${ACCOUNT_ID}/<ACCOUNT_ID>/g" \
+      -e 's/(^|[^0-9])[0-9]{12}([^0-9]|$)/\1<OTHER_ACCOUNT_ID>\2/g' \
+      -e 's/(^|[^0-9])[0-9]{12}([^0-9]|$)/\1<OTHER_ACCOUNT_ID>\2/g' \
+      -e 's/\b(AROA|AIDA|AKIA|ASIA|ANPA|AGPA|AIPA)[A-Z0-9]{12,}\b/<UNIQUE_ID>/g' \
+      -e 's/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/<UUID>/g' \
+      -e 's/(authorization[ -]?id:? )[a-z0-9]{20,}/\1<AUTH_ID>/g; s/authorization-details\/[a-z0-9]{20,}/authorization-details\/<AUTH_ID>/g' \
       -e 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/<EMAIL>/g' \
+      -e 's/0\.0\.0\.0\/0/__ANY_IPV4__/g' \
       -e 's/\b([0-9]{1,3}\.){3}[0-9]{1,3}(\/[0-9]{1,2})?\b/<IPV4>/g' \
+      -e 's/__ANY_IPV4__/0.0.0.0\/0/g' \
       -e 's/\b(o-[a-z0-9]{10,32}|r-[a-z0-9]{4,32}|p-[a-z0-9]{8,128})\b/<ORG_ID>/g'
   else
     cat

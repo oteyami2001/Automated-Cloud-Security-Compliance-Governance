@@ -11,8 +11,9 @@ and a UTC timestamp. Account IDs, IPs and e-mail addresses are never recorded he
 | P0-1 | Repository inspected | GitHub API `list_branches` → `[]`. Local clone: "No commits yet" (2026-11-24) | ✅ |
 | P0-2 | AWS access from the build environment | `sts:GetCallerIdentity` → `InvalidClientTokenId` (2026-11-24). No AWS call succeeded | ✅ (blocked, recorded) |
 | P0-3 | Discovery script read-only + redaction | `tests/unit/test_discovery_script.py` (static verb check + stubbed-CLI redaction test) | ✅ |
-| P0-4 | Live discovery in CloudShell | owner run of `scripts/discover_aws.sh us-east-2 us-east-1` | ⏳ |
+| P0-4 | Live discovery in CloudShell | Owner run 2026-11-24T06:21:46Z, 845-line report (kept private). Summary in `docs/phase-0-assessment.md` §2.4 | ☁️ |
 | P0-5 | Account and Region confirmed | owner confirmation | ⏳ |
+| P0-6 | Discovery redaction gap (other accounts' IDs, unique IDs, UUIDs, authorization IDs) | Found in the owner's run. Fixed in `scripts/discover_aws.sh` and covered by `test_output_is_redacted_by_default` | ✅ |
 
 ## Phase 1: design
 

@@ -68,8 +68,12 @@ run "environment_invariants" {
     error_message = "committed configuration must be report-only (remediation windows are separate, reviewed changes)"
   }
   assert {
-    condition     = !output.ownership.config_recorder && !output.ownership.security_hub && !output.ownership.guardduty && !output.ownership.cloudtrail
-    error_message = "no account-level security service is owned by default (ADR 0003)"
+    condition     = !output.ownership.security_hub && !output.ownership.guardduty && !output.ownership.cloudtrail
+    error_message = "Security Hub, GuardDuty and CloudTrail are never owned (SCP-denied or pre-existing; ADR 0003/0005)"
+  }
+  assert {
+    condition     = !output.ownership.config_recorder || var.environment == "dev"
+    error_message = "only dev may own a Config recorder (discovery D5: none existed in us-east-2)"
   }
   assert {
     condition     = contains(output.event_rule_names, "acscg-${var.environment}-synthetic") == (var.environment == "dev")

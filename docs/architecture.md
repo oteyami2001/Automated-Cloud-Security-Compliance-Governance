@@ -106,11 +106,11 @@ flowchart LR
 
 | Component | AWS service | Responsibility | Owned by this project? | Status |
 |---|---|---|---|---|
-| Configuration evaluation | AWS Config | Records selected resource types and evaluates managed and custom rules (SEC-001…014) | Rules: yes. Recorder: `create` **or** `integrate` (D5) | 📝 |
+| Configuration evaluation | AWS Config | Records selected resource types and evaluates managed and custom rules (SEC-001…014) | Rules: yes. Recorder: **`create` in dev** (D5: none existed) | 📝 |
 | API audit source | CloudTrail | Management events for SEC-012/015 through EventBridge | **No.** Reuses the existing trail (ADR 0005) | 📝 |
-| Access analysis | IAM Access Analyzer | External-access findings (SEC-001, SEC-010) | `create` if none exists (account analyzer, external access only) | 📝 |
-| Central findings (optional) | Security Hub CSPM | Additional controls and findings in ASFF | `disabled` by default; `integrate` if already enabled | 📝 |
-| Threat detection (optional) | GuardDuty | Threat findings, report-only (scenario 16 uses sample findings) | `disabled` by default; `integrate` if already enabled | 📝 |
+| Access analysis | IAM Access Analyzer | External-access findings (SEC-001, SEC-010) | **SCP-denied in the target account (D8)**: off. Optional elsewhere | 📝 |
+| Central findings (optional) | Security Hub CSPM | Additional controls and findings in ASFF | **SCP-denied in the target account (D6)**: `disabled` | 📝 |
+| Threat detection (optional) | GuardDuty | Threat findings, report-only (scenario 16 offline) | **SCP-denied in the target account (D7)**: `disabled` | 📝 |
 | Routing | EventBridge (default bus) | One narrow rule per source and detail-type | Yes | 📝 |
 | Processing | Lambda `findings-processor` (Python 3.13, arm64) | Validation, normalisation, severity, ownership, dedupe, lifecycle, evidence, notification | Yes | 📝 |
 | Dead letters | SQS `findings-dlq` (SSE-SQS) | Events that failed after retries (EventBridge target DLQ and Lambda on-failure destination) | Yes | 📝 |

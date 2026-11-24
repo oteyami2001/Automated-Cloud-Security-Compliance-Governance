@@ -15,7 +15,7 @@ variables {
 run "base_rules_only_by_default" {
   command = apply
   assert {
-    condition     = toset(keys(aws_cloudwatch_event_rule.this)) == toset(["config-compliance", "cloudtrail-changes", "access-analyzer", "ssm-status"])
+    condition     = toset(keys(aws_cloudwatch_event_rule.this)) == toset(["config-compliance", "cloudtrail-changes", "ssm-status"])
     error_message = "optional sources and synthetic events are off by default"
   }
   assert {
@@ -35,6 +35,7 @@ run "base_rules_only_by_default" {
 run "optional_and_synthetic_rules" {
   command = apply
   variables {
+    enable_access_analyzer = true
     enable_security_hub    = true
     enable_guardduty       = true
     allow_synthetic_events = true

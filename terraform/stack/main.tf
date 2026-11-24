@@ -149,6 +149,7 @@ module "eventbridge" {
   processor_name         = module.compliance_engine.function_names["findings-processor"]
   dlq_arn                = module.compliance_engine.dlq_arn
   dlq_url                = module.compliance_engine.dlq_url
+  enable_access_analyzer = var.create_access_analyzer
   enable_security_hub    = module.security_hub.findings_enabled
   enable_guardduty       = module.guardduty.findings_enabled
   allow_synthetic_events = var.allow_synthetic_events

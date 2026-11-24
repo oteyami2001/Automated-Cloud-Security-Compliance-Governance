@@ -23,3 +23,12 @@ The control catalog is configuration-centric. Security Hub CSPM and GuardDuty bi
 ## Alternatives considered
 
 Security Hub as the central bus for everything: higher cost and a hard dependency on an optional service.
+
+## Update 2026-11-24 (discovery)
+
+In the target account an SCP explicitly denies Security Hub CSPM, GuardDuty and IAM Access
+Analyzer, including read calls. The modules remain for portability (other accounts), but in this
+account they stay `disabled`. CI roles do not request those permissions, and the SCP is never
+bypassed. Scenario 16 (optional threat findings) is proven offline with synthetic GuardDuty and
+Security Hub events and is not run live. This confirms the decision that the platform must work on
+Config + CloudTrail alone.

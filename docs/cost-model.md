@@ -53,6 +53,16 @@ retrieved 2026-11-24. The marketing pricing pages were not reachable from the bu
 | A10 | GuardDuty, if enabled: CloudTrail management events per day | 20,000–100,000 | D11 / CloudTrail |
 | A11 | If Config is already recording all types (integrate mode) | the project adds only rule evaluations, no CI cost | D5 |
 
+### Discovery update (2026-11-24)
+
+- Resources of recorded types in us-east-2 are far fewer than A1 assumed. About 25–60 including
+  this project's own (3 buckets, 0 instances/volumes, 0 IAM users, 2 customer policies, default
+  VPC only). Day-1 Config cost is therefore about USD 0.3 instead of 1.0. The estimates below are
+  kept as a conservative upper bound.
+- Security Hub CSPM and GuardDuty are SCP-denied, so the optional-service lines do not apply to
+  this account. The recommended demonstration window is core-only: **≈ USD 2.5–3.5 for 3 days**.
+- The account already has two budgets, so the third (`acscg`) may carry a small daily charge (unverified).
+
 ## 3. Estimates
 
 ### Core platform (Config rules + recorder for selected types, processing, evidence, notifications, dashboard; optional services off)
