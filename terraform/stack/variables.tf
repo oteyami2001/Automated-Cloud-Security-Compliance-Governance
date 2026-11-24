@@ -75,7 +75,7 @@ variable "existing_trail_name" {
 }
 
 variable "create_access_analyzer" {
-  description = "Create an account-level external-access analyzer (free) if discovery shows none exists."
+  description = "Create an account-level external-access analyzer (free). Off: discovery D8 shows an SCP denies access-analyzer:* in the target account."
   type        = bool
   default     = false
 }

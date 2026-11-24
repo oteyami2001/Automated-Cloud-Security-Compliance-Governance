@@ -2,10 +2,10 @@
 # GitHub environment secrets/variables as TF_VAR_* (never committed).
 environment            = "dev"
 region                 = "us-east-2"
-config_ownership_mode  = "integrate" # confirm from discovery D5 (ADR 0003)
-security_hub_mode      = "disabled"  # optional, approved window only (ADR 0004)
-guardduty_mode         = "disabled"  # optional, approved window only (ADR 0004)
-cloudtrail_mode        = "integrate" # reuse the existing trail (ADR 0005)
+config_ownership_mode  = "create"    # discovery 2026-11-24 (D5): no recorder in us-east-2, so this project owns one, limited to catalog types
+security_hub_mode      = "disabled"  # SCP explicitly denies securityhub:* in this account (discovery D6); never bypassed
+guardduty_mode         = "disabled"  # SCP explicitly denies guardduty:* in this account (discovery D7); never bypassed
+cloudtrail_mode        = "integrate" # D4: idp-management-events is logging, log file validation on (ADR 0005)
 existing_trail_name    = "idp-management-events"
 log_retention_days     = 30
 object_lock_days       = 7

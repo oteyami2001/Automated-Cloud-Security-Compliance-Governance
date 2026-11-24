@@ -1,6 +1,6 @@
 # ADR 0002: Target account and Region
 
-- **Status:** Proposed (pending owner confirmation, blocker B1)
+- **Status:** Proposed. Discovery on 2026-11-24 supports it (same account as Projects 1–2; us-east-1 SCP-denied). Awaiting explicit owner confirmation (B1)
 - **Date:** 2026-11-24
 
 ## Context

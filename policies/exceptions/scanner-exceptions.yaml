@@ -258,7 +258,7 @@ suppressions:
 - tool: checkov
   rule: CKV_AWS_53
   path: terraform/stack/fixtures.tf
-  justification: Scenario 4 can disable ONE setting on the empty fixture; account-level BPA still blocks public access.
+  justification: Scenario 4 can disable ONE setting on the empty fixture; ACLs are disabled and the only bucket policy is a Terraform-managed Deny.
   owner: oteyami2001
   review_by: '2027-05-01'
 - tool: checkov
@@ -325,6 +325,12 @@ suppressions:
   rule: S603
   path: tests/unit/test_discovery_script.py
   justification: fixed script path, stubbed aws binary
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: ruff
+  rule: S603
+  path: tests/unit/test_phase3_scripts.py
+  justification: fixed bash checking this repository's script
   owner: oteyami2001
   review_by: '2027-05-01'
 - tool: trivy

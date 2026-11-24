@@ -18,6 +18,12 @@ variable "dlq_url" {
   type = string
 }
 
+variable "enable_access_analyzer" {
+  description = "Route IAM Access Analyzer findings (off where an SCP denies access-analyzer:*)."
+  type        = bool
+  default     = false
+}
+
 variable "enable_security_hub" {
   type    = bool
   default = false

@@ -11,8 +11,9 @@ and a UTC timestamp. Account IDs, IPs and e-mail addresses are never recorded he
 | P0-1 | Repository inspected | GitHub API `list_branches` → `[]`. Local clone: "No commits yet" (2026-11-24) | ✅ |
 | P0-2 | AWS access from the build environment | `sts:GetCallerIdentity` → `InvalidClientTokenId` (2026-11-24). No AWS call succeeded | ✅ (blocked, recorded) |
 | P0-3 | Discovery script read-only + redaction | `tests/unit/test_discovery_script.py` (static verb check + stubbed-CLI redaction test) | ✅ |
-| P0-4 | Live discovery in CloudShell | owner run of `scripts/discover_aws.sh us-east-2 us-east-1` | ⏳ |
+| P0-4 | Live discovery in CloudShell | Owner run 2026-11-24T06:21:46Z, 845-line report (kept private). Summary in `docs/phase-0-assessment.md` §2.4 | ☁️ |
 | P0-5 | Account and Region confirmed | owner confirmation | ⏳ |
+| P0-6 | Discovery redaction gap (other accounts' IDs, unique IDs, UUIDs, authorization IDs) | Found in the owner's run. Fixed in `scripts/discover_aws.sh` and covered by `test_output_is_redacted_by_default` | ✅ |
 
 ## Phase 1: design
 
@@ -66,6 +67,18 @@ All results below were produced in the build environment without AWS credentials
   uses the registry normally.
 - `tflint --init` needs the GitHub API (blocked here). The ruleset was installed from its GitHub
   release after checksum verification. CI uses `tflint --init` with the workflow token.
+
+## Phase 3: secure bootstrap (approved 2026-11-24)
+
+| ID | Item | Evidence | Status |
+|---|---|---|---|
+| P3-1 | Owner and repository IDs for immutable OIDC subjects | GitHub search API: owner 157901928, repository 1465572625 (2026-11-24) | ✅ |
+| P3-2 | Provider lock files for bootstrap and stack | AWS provider 6.73.0, 5 platforms, zips checksum-verified against HashiCorp SHA256SUMS | ✅ |
+| P3-3 | Bootstrap tooling | `install_terraform.sh` (checksum), `bootstrap.sh` (account check, digest-bound apply of the saved plan), `verify_bootstrap.sh` (read-only). `tests/unit/test_phase3_scripts.py` | ✅ |
+| P3-4 | GitHub settings applied and verified | owner: `configure_github.sh`, then `verify_github_settings.sh` | ⏳ |
+| P3-5 | Bootstrap plan reviewed (summary + digest) | owner run of `bootstrap.sh plan` | ⏳ |
+| P3-6 | Bootstrap applied, state migrated | owner, after approval | ⏳ |
+| P3-7 | `verify_bootstrap.sh`: all checks passed | owner | ⏳ |
 
 ## Validation scenarios (Phase 9 target)
 

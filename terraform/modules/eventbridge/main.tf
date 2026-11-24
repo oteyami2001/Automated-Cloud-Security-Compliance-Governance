@@ -28,13 +28,6 @@ locals {
         detail        = { eventName = local.cloudtrail_event_names }
       }
     }
-    access-analyzer = {
-      description = "IAM Access Analyzer findings"
-      pattern = {
-        source        = ["aws.access-analyzer"]
-        "detail-type" = ["Access Analyzer Finding"]
-      }
-    }
     ssm-status = {
       description = "Remediation runbook status changes"
       pattern = {
@@ -46,6 +39,15 @@ locals {
   }
 
   optional_rules = merge(
+    var.enable_access_analyzer ? {
+      access-analyzer = {
+        description = "IAM Access Analyzer findings"
+        pattern = {
+          source        = ["aws.access-analyzer"]
+          "detail-type" = ["Access Analyzer Finding"]
+        }
+      }
+    } : {},
     var.enable_security_hub ? {
       securityhub = {
         description = "Security Hub CSPM findings (Config-generated findings excluded; ingested directly)"
