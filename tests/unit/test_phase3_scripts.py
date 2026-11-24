@@ -84,3 +84,8 @@ def test_root_lock_files_cover_ci_and_cloudshell_platforms() -> None:
         lock = (ROOT / "terraform" / root / ".terraform.lock.hcl").read_text("utf-8")
         assert 'version     = "6.73.0"' in lock
         assert lock.count('"h1:') >= 5, root  # linux amd64/arm64, darwin amd64/arm64, windows amd64
+
+
+def test_bootstrap_plan_reports_no_changes_instead_of_exiting_silently() -> None:
+    script = (SCRIPTS / "bootstrap.sh").read_text("utf-8")
+    assert script.index("^No changes") < script.index("grep -E '^Plan:'")

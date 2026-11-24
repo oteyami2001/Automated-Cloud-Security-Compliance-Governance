@@ -42,6 +42,11 @@ case "$CMD" in
     terraform -chdir="$DIR" plan -input=false -no-color -out="$PLAN" >>"$LOG" 2>&1 || { redact <"$LOG" | grep -E '^(Error|│)' | head -40; exit 1; }
     terraform -chdir="$DIR" show -json "$PLAN" >"$JSON"
     echo "== Plan summary (addresses and actions only; full plan in $LOG, keep it private)"
+    if grep -q '^No changes' "$LOG"; then
+      echo "No changes: the bootstrap already matches the code. Nothing to apply."
+      rm -f "$PLAN"
+      exit 0
+    fi
     grep -E '^Plan:' "$LOG"
     python3 "$ROOT/scripts/plan_guard.py" check "$JSON" --mode apply --no-boundary-check | redact
     echo "Share the summary and digest above for review. Apply only after approval:"
