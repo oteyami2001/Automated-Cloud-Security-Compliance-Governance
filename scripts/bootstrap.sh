@@ -12,6 +12,9 @@
 set -euo pipefail
 
 CMD=${1:?usage: bootstrap.sh plan | apply <digest> | migrate | verify}
+# The AWS provider is ~700 MB unpacked; CloudShell's home is 1 GB. Keep .terraform in /tmp
+# (cleared on restart: just run `plan` again; the digest of an unchanged plan stays the same).
+export TF_DATA_DIR=${TF_DATA_DIR:-/tmp/acscg-bootstrap-tf}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 DIR="$ROOT/terraform/bootstrap"
 PLAN="$HOME/acscg-bootstrap.tfplan"

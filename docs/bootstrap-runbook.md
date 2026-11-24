@@ -1,6 +1,6 @@
 # Bootstrap runbook
 
-**Status: §1 done (2026-11-24). Phase 3 approved 2026-11-24: §2 is ready to run; apply only after the plan review in step 4.**
+**Status: §1 done (2026-11-24). §2 and §2a done and verified 2026-11-24 (evidence P3-4…P3-7). Remaining: cost-allocation tag (P3-8).**
 
 ## 1. Phase 0: read-only discovery in AWS CloudShell (run now)
 
@@ -97,8 +97,14 @@ bash scripts/bootstrap.sh verify
 ```
 
 Budget e-mails: AWS Budgets sends alerts to the address directly (no subscription confirmation).
-The tag filter needs the `Project` cost-allocation tag to be **Active**. The verify script prints
-its status. It is probably already active because the `idp` budget uses the same tag.
+The tag filter needs the `Project` cost-allocation tag to be **Active**. On 2026-11-24 it was not
+found. Check `aws ce list-cost-allocation-tags --tag-keys Project` after 24 h. If it is `Inactive`, run
+`aws ce update-cost-allocation-tags-status --cost-allocation-tags-status TagKey=Project,Status=Active`.
+In an AWS Organization this may only be allowed from the management account. Until then the
+account-wide `aiops-account-monthly` budget is the backstop.
+
+CloudShell's home is 1 GB and the AWS provider is ~700 MB, so `bootstrap.sh` keeps `.terraform` in
+`/tmp` (`TF_DATA_DIR`). After a CloudShell restart, run `plan` again before `apply`.
 
 ## 2a. GitHub settings (owner, once)
 
