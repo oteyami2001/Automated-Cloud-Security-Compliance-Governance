@@ -29,8 +29,7 @@ and a UTC timestamp. Account IDs, IPs and e-mail addresses are never recorded he
 ## Phase 2: offline security automation (2026-11-24)
 
 All results below were produced in the build environment without AWS credentials. CI
-(`.github/workflows/ci.yml`) repeats them on every pull request. Its run IDs are recorded when
-the first run completes on GitHub.
+(`.github/workflows/ci.yml`) repeats them on every pull request (first run: P2-12).
 
 | ID | Item | Evidence | Status |
 |---|---|---|---|
@@ -45,6 +44,7 @@ the first run completes on GitHub.
 | P2-9 | Reproducible Lambda package | `scripts/build_lambda.py` twice → identical SHA-256. Test asserts determinism and contents | ✅ |
 | P2-10 | Hash-locked dependencies | `requirements-dev.lock` installs with `--require-hashes`. Pins are the newest releases ≥ 14 days old | ✅ |
 | P2-11 | Mermaid diagrams | Re-rendered after the lifecycle changes (unchanged structure) | ✅ |
+| P2-12 | **CI on GitHub** | `ci` run [45337736595](https://github.com/oteyami2001/Automated-Cloud-Security-Compliance-Governance/actions/runs/45337736595) on commit `5b4adb0` (PR #1), 2026-11-24 06:04:31–06:06:35 UTC: python, terraform, tflint, checkov, trivy and workflow-security all **success** | ✅ |
 
 ### Defects found and fixed during Phase 2 (by tests or scanners)
 
