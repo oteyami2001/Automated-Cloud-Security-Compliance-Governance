@@ -3,12 +3,14 @@
 
 locals {
   functions = var.function_names
-  lambda_metrics = flatten([
+  # Each metric must stay a list of strings. flatten() would also flatten these rows into one list
+  # of strings, which CloudWatch rejects (first dev apply, 2026-11-24); concat() joins only one level.
+  lambda_metrics = concat([
     for name in values(local.functions) : [
       ["AWS/Lambda", "Invocations", "FunctionName", name],
       [".", "Errors", ".", name],
     ]
-  ])
+  ]...)
 }
 
 resource "aws_cloudwatch_log_metric_filter" "remediation_failed" {
