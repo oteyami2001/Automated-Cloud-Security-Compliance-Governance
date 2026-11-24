@@ -87,6 +87,10 @@ run "bootstrap_guardrails" {
     condition     = contains(flatten([for s in jsondecode(aws_iam_policy.workload_boundary.policy).Statement : s.Action if s.Sid == "ReadAndScopedRemediation"]), "s3:GetAccelerateConfiguration")
     error_message = "the Config recorder role needs the S3 configuration reads"
   }
+  assert {
+    condition     = [for st in jsondecode(output.ci_role_policies["dev-apply"]).Statement : st.Condition.StringEquals["aws:ResourceTag/Project"] if st.Sid == "FixtureSecurityGroupInProjectVpc"][0] == "acscg"
+    error_message = "security groups may be created only inside project-tagged VPCs"
+  }
 }
 
 run "other_regions_rejected" {

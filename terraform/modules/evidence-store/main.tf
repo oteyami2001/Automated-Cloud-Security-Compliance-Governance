@@ -9,6 +9,8 @@ locals {
   bucket_arn    = "arn:${data.aws_partition.current.partition}:s3:::${local.bucket_name}"
   root_arn      = "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:root"
   log_group_arn = "arn:${data.aws_partition.current.partition}:logs:${var.region}:${var.account_id}:log-group:*${var.name_prefix}*"
+  # Project log groups outside /aws/lambda live under /<project>/<env>/ (e.g. /acscg/dev/fixture).
+  log_group_path_arn = "arn:${data.aws_partition.current.partition}:logs:${var.region}:${var.account_id}:log-group:/${replace(var.name_prefix, "-", "/")}/*"
 }
 
 data "aws_iam_policy_document" "key" {
@@ -36,7 +38,7 @@ data "aws_iam_policy_document" "key" {
     condition {
       test     = "ArnLike"
       variable = "kms:EncryptionContext:aws:logs:arn"
-      values   = [local.log_group_arn]
+      values   = [local.log_group_arn, local.log_group_path_arn]
     }
   }
 

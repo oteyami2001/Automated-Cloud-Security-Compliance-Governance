@@ -32,7 +32,12 @@ fi
 REGION=${AWS_REGION:-us-east-2}
 [[ $REGION =~ ^[a-z]{2}-[a-z]+-[0-9]$ ]] || { echo "::error::invalid AWS_REGION"; exit 2; }
 
-redact() { sed -E -e 's/[0-9]{12}/***/g' -e 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/<email>/g'; }
+redact() {
+  sed -E -e 's/[0-9]{12}/***/g' \
+    -e 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/<email>/g' \
+    -e 's/\b(vpc|sg|sgr|subnet|igw|eni|vol|i|ami|snap|rtb|acl|nat|vpce)-[0-9a-f]{8,17}\b/\1-<id>/g' \
+    -e 's/(Encoded authorization failure message:) [A-Za-z0-9_-]+/\1 <removed>/g'
+}
 
 init() {
   terraform -chdir="$STACK" init -input=false -no-color -reconfigure \
@@ -42,7 +47,7 @@ init() {
     -backend-config="encrypt=true" \
     -backend-config="kms_key_id=alias/acscg-tfstate" \
     -backend-config="use_lockfile=true" >"$WORK/init.log" 2>&1 || {
-    grep -E '^(Error|│)' "$WORK/init.log" | sed -E 's/[0-9]{12}/***/g' | head -40
+    grep -E '^(Error|│)' "$WORK/init.log" | redact | head -40
     return 1
   }
 }
@@ -52,7 +57,7 @@ plan() {
   [ "$MODE" = destroy ] && extra+=(-destroy)
   terraform -chdir="$STACK" plan -input=false -lock-timeout=120s -no-color \
     -var-file="../envs/$ENV/terraform.tfvars" "${extra[@]}" -out="$WORK/tfplan" >"$WORK/plan.log" 2>&1 || {
-    grep -E '^(Error|│)' "$WORK/plan.log" | sed -E 's/[0-9]{12}/***/g' | head -40
+    grep -E '^(Error|│)' "$WORK/plan.log" | redact | head -40
     return 1
   }
   terraform -chdir="$STACK" show -json "$WORK/tfplan" >"$WORK/plan.json"
@@ -72,7 +77,7 @@ case "$CMD" in
         echo "### Terraform plan: $ENV ($MODE)"
         echo '```'
         grep -E '^Plan:' "$WORK/plan.log" || true
-        grep -v '^digest=' "$WORK/guard.txt" | sed -E 's/[0-9]{12}/***/g'
+        grep -v '^digest=' "$WORK/guard.txt" | redact
         echo '```'
         echo "Digest for terraform-apply: \`$DIGEST\`"
       } >>"$GITHUB_STEP_SUMMARY"
@@ -113,7 +118,7 @@ for rc in plan.get("resource_changes", []):
 PY
         exit 3
         ;;
-      *) grep -E '^(Error|│)' "$WORK/plan.log" | sed -E 's/[0-9]{12}/***/g' | head -40; exit 1 ;;
+      *) grep -E '^(Error|│)' "$WORK/plan.log" | redact | head -40; exit 1 ;;
     esac
     ;;
   *) echo "::error::unknown command $CMD"; exit 2 ;;
