@@ -7,7 +7,7 @@ locals {
   exec_role_arns    = var.enable_remediation ? [for k in local.runbook_keys : "${local.role_arn}/${local.name_prefix}-rem-${k}-exec"] : []
   gatekeeper_role   = var.enable_remediation ? ["${local.role_arn}/${local.gatekeeper}"] : []
   allowlist         = try(local.policy_source.allowlist, [])
-  compliance_roles  = [for k in ["findings-processor", "config-evaluator", "report-generator"] : "${local.role_arn}/${local.name_prefix}-${k}"]
+  compliance_roles  = [for k in ["findings-processor", "config-evaluator", "report-generator", "findings-reconciler"] : "${local.role_arn}/${local.name_prefix}-${k}"]
   automation_admins = [local.apply_role, local.cleanup_role]
 
   rendered_policy = merge(local.policy_source, {

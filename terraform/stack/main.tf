@@ -112,6 +112,9 @@ module "security_config" {
   permissions_boundary_arn      = local.boundary_arn
   min_log_retention_days        = var.log_retention_days
   force_destroy_delivery_bucket = var.environment == "dev"
+
+  # Rules publish their first results at creation. Route events first so none are lost (P4-13).
+  depends_on = [module.eventbridge]
 }
 
 module "security_hub" {

@@ -101,6 +101,14 @@ All results below were produced in the build environment without AWS credentials
 | P4-13 | Gap: first evaluations not ingested | EventBridge rule `acscg-dev-config-compliance`: 51 matched events, 4 target invocations, 0 failed invocations. Most first results were published while the apply was still creating the rule target, so they reached no target, and Config does not resend unchanged results. The findings table therefore lacks the NON_COMPLIANT results. Planned for Phase 5: reconciliation from `GetComplianceDetailsByConfigRule`, and Config rules created only after event routing | ⏳ Phase 5 |
 | P4-14 | Gap: custom never-expire check has no data | `list-discovered-resources --resource-type AWS::Logs::LogGroup` = 0 although the recorder lists the type; rule status `FirstEvaluationStarted: False`, no error. The archived Config resource reference does not list log groups as a recorded type. Planned for Phase 5: make `sec014-retention-set` a periodic custom rule that reads `logs:DescribeLogGroups` itself. Until then SEC-014 relies on the managed rule (COMPLIANT; it cannot detect "never expire", P4-1) | ⏳ Phase 5 |
 | P4-15 | Scenario 1 (compliant resource passes) | Not run: it needs the fixture bucket, which is off in Phase 4. Existing buckets were evaluated (SEC-001 bucket rule and SEC-002 COMPLIANT), which shows the rules work but is not the scenario | ⏳ |
+## Phase 5: findings engine (approved 2026-11-24)
+
+| ID | Item | Evidence | Status |
+|---|---|---|---|
+| P5-1 | Reconciliation (fixes P4-13) | `findings_processor/reconcile.py`: reads every current result of the `acscg-` rules (`DescribeConfigRules`, `GetComplianceDetailsByConfigRule`, all pages) and feeds each through the normal processor. Deterministic event IDs make re-runs duplicates. New Lambda `findings-reconciler` every 6 h; read-only Config permissions scoped to `config-rule/*`. `tests/unit/test_reconcile.py` | ✅ offline |
+| P5-2 | Periodic never-expire check (fixes P4-14) | `sec014-retention-set` is now a `ScheduledNotification` rule (24 h). The evaluator lists log groups itself (`logs:DescribeLogGroups`) and puts evaluations in batches of 100. Tests cover pagination, batching and never-expire | ✅ offline |
+| P5-3 | Rule ordering | `module.security_config` depends on `module.eventbridge`, so a fresh deployment routes events before the rules publish their first results | ✅ offline |
+
 ## Validation scenarios (Phase 9 target)
 
 See `docs/validation-scenarios.md`. Rows are filled in only as each scenario runs.

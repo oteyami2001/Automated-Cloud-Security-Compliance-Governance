@@ -87,8 +87,14 @@ run "periodic_rules_have_no_scope_and_retention_has_custom_check" {
     error_message = "CW_LOGGROUP_RETENTION_PERIOD_CHECK is periodic (AWS Config developer guide)"
   }
   assert {
-    condition     = tolist(one(aws_config_config_rule.custom["sec014-retention-set"].scope).compliance_resource_types) == tolist(["AWS::Logs::LogGroup"])
-    error_message = "never-expire log groups need the custom retention check"
+    condition = (length(aws_config_config_rule.custom["sec014-retention-set"].scope) == 0 &&
+      one(one(aws_config_config_rule.custom["sec014-retention-set"].source).source_detail).message_type == "ScheduledNotification" &&
+    one(one(aws_config_config_rule.custom["sec014-retention-set"].source).source_detail).maximum_execution_frequency == "TwentyFour_Hours")
+    error_message = "the never-expire check is periodic: Config records no log groups here (P4-14)"
+  }
+  assert {
+    condition     = one(one(aws_config_config_rule.custom["sec005-admin-port-custom"].source).source_detail).message_type == "ConfigurationItemChangeNotification"
+    error_message = "the security group checks stay change-triggered"
   }
   assert {
     condition     = !contains(one(aws_config_config_rule.managed["sec013-required-tags"].scope).compliance_resource_types, "AWS::Lambda::Function")

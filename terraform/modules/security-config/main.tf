@@ -42,7 +42,8 @@ locals {
   custom_rules = !var.enable_custom_rules ? {} : {
     "sec005-admin-port-custom" = { control = "SEC-005", types = ["AWS::EC2::SecurityGroup"], params = { check = "open_admin_port", controlId = "SEC-005" } }
     "sec006-admin-port-custom" = { control = "SEC-006", types = ["AWS::EC2::SecurityGroup"], params = { check = "open_admin_port", controlId = "SEC-006" } }
-    "sec014-retention-set"     = { control = "SEC-014", types = ["AWS::Logs::LogGroup"], params = { check = "log_retention_set", minRetentionDays = tostring(var.min_log_retention_days) } }
+    # Periodic: Config records no log groups here (evidence P4-14); the evaluator lists them itself.
+    "sec014-retention-set" = { control = "SEC-014", types = [], params = { check = "log_retention_set", minRetentionDays = tostring(var.min_log_retention_days) } }
   }
   enabled_custom = { for k, r in local.custom_rules : k => r if contains(var.enabled_controls, r.control) }
 }
@@ -263,14 +264,18 @@ resource "aws_config_config_rule" "custom" {
     owner             = "CUSTOM_LAMBDA"
     source_identifier = var.custom_rule_lambda_arn
     source_detail {
-      message_type = "ConfigurationItemChangeNotification"
+      message_type                = length(each.value.types) > 0 ? "ConfigurationItemChangeNotification" : "ScheduledNotification"
+      maximum_execution_frequency = length(each.value.types) > 0 ? null : "TwentyFour_Hours"
     }
   }
 
   input_parameters = jsonencode(each.value.params)
 
-  scope {
-    compliance_resource_types = each.value.types
+  dynamic "scope" {
+    for_each = length(each.value.types) > 0 ? [each.value.types] : []
+    content {
+      compliance_resource_types = scope.value
+    }
   }
 
   depends_on = [aws_lambda_permission.config, aws_config_configuration_recorder_status.this]

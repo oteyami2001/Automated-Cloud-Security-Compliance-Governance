@@ -23,6 +23,13 @@ locals {
       timeout     = 120
       concurrency = 1
     }
+    # Feeds Config's current results through the processor (evidence P4-13). Same permissions as the
+    # processor plus read-only Config calls.
+    findings-reconciler = {
+      handler     = "acscg.findings_processor.reconcile.lambda_handler"
+      timeout     = 300
+      concurrency = 1
+    }
   }
   environment = {
     ACSCG_ENV                 = var.environment
@@ -186,6 +193,11 @@ data "aws_iam_policy_document" "evaluator" {
     resources = ["*"] # PutEvaluations does not support resource-level permissions
   }
   statement {
+    sid       = "ListLogGroupsForPeriodicRetentionCheck"
+    actions   = ["logs:DescribeLogGroups"]
+    resources = ["arn:${local.p}:logs:${var.region}:${var.account_id}:log-group:*"]
+  }
+  statement {
     actions   = ["kms:Decrypt"]
     resources = [var.kms_key_arn]
   }
@@ -210,11 +222,21 @@ data "aws_iam_policy_document" "report" {
   }
 }
 
+data "aws_iam_policy_document" "reconciler" {
+  source_policy_documents = [data.aws_iam_policy_document.processor.json]
+  statement {
+    sid       = "ReadConfigResults"
+    actions   = ["config:DescribeConfigRules", "config:GetComplianceDetailsByConfigRule"]
+    resources = ["arn:${local.p}:config:${var.region}:${var.account_id}:config-rule/*"] # rule ARNs carry a random ID
+  }
+}
+
 locals {
   role_policies = {
-    findings-processor = data.aws_iam_policy_document.processor.json
-    config-evaluator   = data.aws_iam_policy_document.evaluator.json
-    report-generator   = data.aws_iam_policy_document.report.json
+    findings-reconciler = data.aws_iam_policy_document.reconciler.json
+    findings-processor  = data.aws_iam_policy_document.processor.json
+    config-evaluator    = data.aws_iam_policy_document.evaluator.json
+    report-generator    = data.aws_iam_policy_document.report.json
   }
 }
 
@@ -296,6 +318,27 @@ resource "aws_lambda_function_event_invoke_config" "processor" {
       destination = aws_sqs_queue.dlq.arn
     }
   }
+}
+
+# ------------------------------------------------------------------ reconciliation
+
+resource "aws_cloudwatch_event_rule" "reconcile" {
+  name                = "${var.name_prefix}-reconcile"
+  description         = "Reconcile findings with AWS Config's current results"
+  schedule_expression = var.reconcile_schedule
+}
+
+resource "aws_cloudwatch_event_target" "reconcile" {
+  rule = aws_cloudwatch_event_rule.reconcile.name
+  arn  = aws_lambda_function.this["findings-reconciler"].arn
+}
+
+resource "aws_lambda_permission" "reconcile" {
+  statement_id  = "AllowReconcileSchedule"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.this["findings-reconciler"].function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.reconcile.arn
 }
 
 # ------------------------------------------------------------------ daily report

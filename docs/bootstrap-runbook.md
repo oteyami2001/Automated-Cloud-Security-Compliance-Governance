@@ -192,3 +192,23 @@ processor receiving events, findings in DynamoDB), recorded in `docs/portfolio-e
 Rollback: Config recording and rules can be stopped by a reviewed destroy plan (Phase 9 cleanup
 workflow). The state, evidence bucket and keys are protected and are never removed by Phase 4.
 
+## 6. Phase 5: findings engine (dev)
+
+**Step 1: deploy the reconciler and the periodic SEC-014 check** with the plan/apply workflows (the
+digest is reviewed first). Expected: the reconciler Lambda, its role, log group, alarm and schedule
+are created; `sec014-retention-set` is updated in place (periodic, no scope).
+
+**Step 2: run the first reconciliation once instead of waiting up to 6 hours** (CloudShell). It only
+reads Config results and writes findings; it changes no resource:
+
+```bash
+export AWS_PAGER=""
+```
+
+```bash
+aws lambda invoke --function-name acscg-dev-findings-reconciler --cli-read-timeout 310 /tmp/reconcile.json >/dev/null && cat /tmp/reconcile.json
+```
+
+The output counts rules, results and processed findings. Each NON_COMPLIANT resource that becomes a
+finding sends one SNS e-mail.
+
