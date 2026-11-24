@@ -82,8 +82,20 @@ run "dev_is_report_only_and_owns_nothing_account_wide" {
     error_message = "synthetic events only in dev; GuardDuty rule only when enabled"
   }
   assert {
-    condition     = length(output.runbook_documents) == 5
-    error_message = "five runbooks"
+    condition     = length(module.remediation) == 0 && length(output.runbook_documents) == 0 && !contains(keys(output.function_names), "remediation-gatekeeper")
+    error_message = "the remediation module is not deployed until Phase 6 (enable_remediation)"
+  }
+  assert {
+    condition     = aws_ssm_parameter.policy.type == "SecureString" && aws_ssm_parameter.policy.name == "/acscg/dev/platform-policy"
+    error_message = "the stack owns the encrypted platform policy parameter even without remediation"
+  }
+  assert {
+    condition     = jsondecode(aws_ssm_parameter.policy.value).approval.approvers == ["arn:aws:iam::111122223333:role/security-approver"]
+    error_message = "approvers must be rendered into the policy"
+  }
+  assert {
+    condition     = contains(jsondecode(aws_ssm_parameter.policy.value).project_role_arns, "arn:aws:iam::111122223333:role/acscg-dev-findings-processor") && contains(jsondecode(aws_ssm_parameter.policy.value).approved_change_principals, "arn:aws:iam::111122223333:role/acscg-github-dev-apply")
+    error_message = "project roles can never approve; Terraform apply changes are authorised"
   }
   assert {
     condition     = length(aws_vpc_security_group_ingress_rule.fixture_open_ssh) == 0 && length(aws_security_group.fixture_untagged) == 0
@@ -101,6 +113,33 @@ run "dev_is_report_only_and_owns_nothing_account_wide" {
     condition     = length(aws_accessanalyzer_analyzer.account) == 0
     error_message = "no analyzer unless discovery shows none exists"
   }
+}
+
+run "remediation_module_can_be_enabled" {
+  command = apply
+  variables {
+    enable_remediation = true
+  }
+  assert {
+    condition     = length(output.runbook_documents) == 5 && contains(keys(output.function_names), "remediation-gatekeeper")
+    error_message = "five runbooks and the gatekeeper when enabled"
+  }
+  assert {
+    condition     = sort(keys(module.remediation[0].execution_role_arns)) == sort(local.runbook_keys)
+    error_message = "the stack's runbook key list must match the remediation module"
+  }
+  assert {
+    condition     = contains(jsondecode(aws_ssm_parameter.policy.value).project_role_arns, "arn:aws:iam::111122223333:role/acscg-dev-rem-sg-exec") && contains(jsondecode(aws_ssm_parameter.policy.value).project_role_arns, "arn:aws:iam::111122223333:role/acscg-dev-remediation-gatekeeper")
+    error_message = "execution roles and the gatekeeper are project roles (never approvers)"
+  }
+}
+
+run "approver_must_be_iam_principal" {
+  command = plan
+  variables {
+    approvers = ["someone@example.com"]
+  }
+  expect_failures = [var.approvers]
 }
 
 run "scenario_fixtures_can_be_enabled" {

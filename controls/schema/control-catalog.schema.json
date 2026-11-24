@@ -54,7 +54,8 @@
             "method": {"enum": ["config_managed_rule", "config_custom_rule", "cloudtrail_eventbridge", "hybrid"]},
             "config_managed_rules": {"type": "array", "items": {"type": "string", "pattern": "^[A-Z0-9_]+$"}},
             "securityhub_controls": {"type": "array", "items": {"type": "string", "pattern": "^[A-Za-z0-9]+\\.\\d+$"}},
-            "verification": {"enum": ["pending", "verified"]}
+            "verification": {"enum": ["pending", "verified"]},
+            "securityhub_verification": {"enum": ["pending", "secondary-source", "verified"]}
           }
         },
         "evaluation_logic": {"type": "string", "minLength": 20},

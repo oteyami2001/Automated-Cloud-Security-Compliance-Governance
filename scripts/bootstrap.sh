@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Phase 3 bootstrap from AWS CloudShell, with the same fail-closed digest as CI (ADR 0008).
 #
-#   bash scripts/bootstrap.sh plan               # init (local state) → plan → guard → digest + summary
+#   bash scripts/bootstrap.sh plan               # init → plan → guard → digest + summary
+#                                                # (S3 state once the bucket exists; local only before the first apply)
 #   bash scripts/bootstrap.sh apply <digest>     # applies ONLY the saved plan whose digest was reviewed
 #   bash scripts/bootstrap.sh migrate            # move the bootstrap state into the new S3 bucket
 #   bash scripts/bootstrap.sh verify             # read-only checks (scripts/verify_bootstrap.sh)
@@ -24,10 +25,19 @@ LOG="$HOME/acscg-bootstrap-$CMD.log"
 [[ ${TF_VAR_aws_account_id:-} =~ ^[0-9]{12}$ ]] || { echo "set TF_VAR_aws_account_id (12 digits) first" >&2; exit 2; }
 CALLER=$(aws sts get-caller-identity --query Account --output text)
 [ "$CALLER" = "$TF_VAR_aws_account_id" ] || { echo "signed-in account does not match TF_VAR_aws_account_id; refusing" >&2; exit 2; }
+BUCKET="acscg-tfstate-${TF_VAR_aws_account_id}-us-east-2"
+use_remote_state() { sed "s/<ACCOUNT_ID>/${TF_VAR_aws_account_id}/" "$DIR/backend.tf.example" >"$DIR/backend.tf"; } # git-ignored
 redact() { sed -E -e "s/${TF_VAR_aws_account_id}/<ACCOUNT_ID>/g" -e 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/<EMAIL>/g'; }
 
 case "$CMD" in
   plan)
+    # After the first apply the state lives in S3. A fresh clone must never plan against an empty
+    # local state (it would try to create everything again), so use the bucket whenever it exists.
+    if aws s3api head-bucket --bucket "$BUCKET" >/dev/null 2>&1; then
+      [ -f "$DIR/terraform.tfstate" ] && { echo "local state found although the S3 state exists; resolve first (see runbook)" >&2; exit 2; }
+      use_remote_state
+      echo "Using the S3 state (update of the existing bootstrap)."
+    fi
     terraform -chdir="$DIR" init -input=false -no-color >"$LOG" 2>&1 || { redact <"$LOG" | tail -20; exit 1; }
     terraform -chdir="$DIR" plan -input=false -no-color -out="$PLAN" >>"$LOG" 2>&1 || { redact <"$LOG" | grep -E '^(Error|│)' | head -40; exit 1; }
     terraform -chdir="$DIR" show -json "$PLAN" >"$JSON"
@@ -47,9 +57,8 @@ case "$CMD" in
     rm -f "$PLAN"
     ;;
   migrate)
-    BUCKET="acscg-tfstate-${TF_VAR_aws_account_id}-us-east-2"
     aws s3api head-bucket --bucket "$BUCKET" >/dev/null || { echo "state bucket not found; apply first" >&2; exit 2; }
-    sed "s/<ACCOUNT_ID>/${TF_VAR_aws_account_id}/" "$DIR/backend.tf.example" >"$DIR/backend.tf" # git-ignored
+    use_remote_state
     terraform -chdir="$DIR" init -input=false -no-color -migrate-state -force-copy >"$LOG" 2>&1 || { redact <"$LOG" | tail -20; exit 1; }
     aws s3api head-object --bucket "$BUCKET" --key bootstrap/terraform.tfstate --query ServerSideEncryption --output text
     terraform -chdir="$DIR" state list >/dev/null && echo "State migrated and readable from S3."

@@ -84,6 +84,10 @@ run "environment_invariants" {
     error_message = "test fixtures exist only in dev"
   }
   assert {
+    condition     = !output.remediation_deployed || var.environment != "prod"
+    error_message = "the remediation module is never deployed in prod"
+  }
+  assert {
     condition     = var.environment != "prod" || (var.deletion_protection && var.point_in_time_recovery && var.log_retention_days >= 365)
     error_message = "prod reference requires deletion protection, PITR and 365-day logs"
   }

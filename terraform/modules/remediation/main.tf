@@ -1,5 +1,6 @@
-# Remediation: gatekeeper Lambda, SSM Automation documents, per-runbook execution roles and the
-# rendered platform policy (SSM SecureString). IAM independently limits every execution role to the
+# Remediation: gatekeeper Lambda, SSM Automation documents and per-runbook execution roles. The
+# platform policy parameter (SSM SecureString) is owned by the stack, because the findings processor
+# reads it even when this module is not deployed. IAM independently limits every execution role to the
 # allowlisted ARNs (defence in depth, docs/security-model.md §4). With an empty allowlist the
 # execution roles can only read.
 
@@ -22,45 +23,7 @@ locals {
     for key, rb in local.runbooks : key => distinct([for e in local.allowlist : e.resource_arn if e.action == rb.action])
   }
 
-  rendered_policy = merge(var.policy_source, {
-    approval                   = merge(try(var.policy_source.approval, {}), { approvers = var.approvers })
-    project_inventory          = sort(distinct(var.project_inventory))
-    approved_change_principals = sort(distinct(concat(var.approved_change_principals, [for r in aws_iam_role.exec : r.arn])))
-    project_role_arns          = sort(distinct(concat(var.project_role_arns, [for r in aws_iam_role.exec : r.arn], [aws_iam_role.gatekeeper.arn])))
-  })
-  rendered_policy_json = jsonencode(local.rendered_policy)
-
   definitions = [for rb in values(local.runbooks) : "${local.arn}:ssm:${var.region}:${var.account_id}:automation-definition/${rb.document}:*"]
-}
-
-# ------------------------------------------------------------------ platform policy parameter
-
-resource "aws_ssm_parameter" "policy" {
-  name        = var.policy_parameter_name
-  description = "ACSCG platform policy (rendered by Terraform; read by the processor and gatekeeper)"
-  type        = "SecureString"
-  key_id      = var.kms_key_arn
-  tier        = "Standard"
-  value       = local.rendered_policy_json
-
-  lifecycle {
-    precondition {
-      condition     = length(local.rendered_policy_json) <= 4096
-      error_message = "Rendered policy exceeds the 4 KB Standard parameter limit."
-    }
-    precondition {
-      condition     = var.policy_source.environment == var.environment
-      error_message = "Policy source environment does not match the deployment environment."
-    }
-    precondition {
-      condition     = !(var.environment == "prod" && var.policy_source.remediation_enabled)
-      error_message = "Remediation cannot be enabled in prod."
-    }
-    precondition {
-      condition     = alltrue([for e in local.allowlist : e.account == var.account_id && e.region == var.region])
-      error_message = "Every allowlist entry must target this deployment's account and Region."
-    }
-  }
 }
 
 # ------------------------------------------------------------------ execution roles
@@ -198,7 +161,7 @@ locals {
       { Sid = "ProjectKey", Effect = "Allow", Action = ["kms:GenerateDataKey", "kms:Decrypt", "kms:Encrypt"], Resource = var.kms_key_arn },
       { Sid = "Notify", Effect = "Allow", Action = "sns:Publish", Resource = var.topic_arn },
       { Sid = "DeadLetter", Effect = "Allow", Action = "sqs:SendMessage", Resource = var.dlq_arn },
-      { Sid = "PolicyRead", Effect = "Allow", Action = "ssm:GetParameter", Resource = aws_ssm_parameter.policy.arn },
+      { Sid = "PolicyRead", Effect = "Allow", Action = "ssm:GetParameter", Resource = var.policy_parameter_arn },
       { Sid = "StartProjectRunbooksOnly", Effect = "Allow", Action = "ssm:StartAutomationExecution", Resource = concat(local.definitions, ["${local.arn}:ssm:${var.region}:${var.account_id}:automation-execution/*"]) },
       { Sid = "TagExecutions", Effect = "Allow", Action = "ssm:AddTagsToResource", Resource = "${local.arn}:ssm:${var.region}:${var.account_id}:automation-execution/*" },
       {
@@ -267,6 +230,22 @@ resource "aws_lambda_function" "gatekeeper" {
   logging_config {
     log_format = "Text" # the code writes structured JSON lines itself (common/log.py)
     log_group  = aws_cloudwatch_log_group.gatekeeper.name
+  }
+
+  lifecycle {
+    # Same guards as the stack's platform policy parameter: this module refuses on its own too.
+    precondition {
+      condition     = var.policy_source.environment == var.environment
+      error_message = "Policy source environment does not match the deployment environment."
+    }
+    precondition {
+      condition     = !(var.environment == "prod" && var.policy_source.remediation_enabled)
+      error_message = "Remediation cannot be enabled in prod."
+    }
+    precondition {
+      condition     = alltrue([for e in local.allowlist : e.account == var.account_id && e.region == var.region])
+      error_message = "Every allowlist entry must target this deployment's account and Region."
+    }
   }
 
   depends_on = [aws_iam_role_policy.gatekeeper]

@@ -11,7 +11,7 @@ output "remediation_enabled" {
 }
 
 output "function_names" {
-  value = merge(module.compliance_engine.function_names, { remediation-gatekeeper = module.remediation.gatekeeper_function_name })
+  value = merge(module.compliance_engine.function_names, { for m in module.remediation : "remediation-gatekeeper" => m.gatekeeper_function_name })
 }
 
 output "table_name" {
@@ -31,7 +31,7 @@ output "event_rule_names" {
 }
 
 output "runbook_documents" {
-  value = module.remediation.document_names
+  value = flatten(module.remediation[*].document_names)
 }
 
 output "dashboard_name" {
@@ -46,6 +46,10 @@ output "ownership" {
     guardduty       = module.guardduty.managed_by_project
     cloudtrail      = module.cloudtrail.managed_by_project
   }
+}
+
+output "remediation_deployed" {
+  value = var.enable_remediation
 }
 
 output "fixture_arns" {

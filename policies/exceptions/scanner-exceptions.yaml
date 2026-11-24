@@ -10,6 +10,12 @@ suppressions:
   owner: oteyami2001
   review_by: '2027-05-01'
 - tool: checkov
+  rule: CKV_GHA_7
+  path: .github/workflows/terraform-apply.yml
+  justification: The digest input does not change what is built; it only gates the apply (must match the re-plan, ADR 0008).
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
   rule: CKV2_AWS_10
   path: terraform/modules/cloudtrail/main.tf
   justification: CloudWatch Logs integration is not needed; EventBridge receives the events directly (ADR 0004).

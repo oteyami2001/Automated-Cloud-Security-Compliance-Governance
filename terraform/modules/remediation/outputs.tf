@@ -18,10 +18,6 @@ output "document_names" {
   value = sort([for d in aws_ssm_document.runbook : d.name])
 }
 
-output "policy_parameter_arn" {
-  value = aws_ssm_parameter.policy.arn
-}
-
 output "allowed_arns" {
   description = "ARNs each execution role may change (empty = read-only)."
   value       = local.allowed_arns

@@ -12,4 +12,5 @@ object_lock_days       = 7
 point_in_time_recovery = true
 deletion_protection    = false
 allow_synthetic_events = true
-enable_test_fixtures   = true # isolated fixtures; every violation flag stays false until a scenario PR
+enable_test_fixtures   = false # Phase 4 deploys monitoring only; fixtures come with the scenario PRs (Phase 5+)
+enable_remediation     = false # Phase 6

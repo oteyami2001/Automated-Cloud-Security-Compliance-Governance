@@ -78,6 +78,15 @@ run "bootstrap_guardrails" {
     condition     = length(aws_iam_policy.workload_boundary.policy) <= 6144
     error_message = "managed policies are limited to 6,144 characters"
   }
+  assert {
+    condition = alltrue([for s in jsondecode(output.ci_role_policies["dev-plan"]).Statement :
+    s.Resource == "arn:aws:s3:::acscg-tfstate-111122223333-us-east-2/*.tflock" if s.Effect == "Allow" && length(setintersection(try(tolist(s.Action), [s.Action]), ["s3:PutObject", "s3:DeleteObject"])) > 0])
+    error_message = "the plan role may write only the state lock file"
+  }
+  assert {
+    condition     = contains(flatten([for s in jsondecode(aws_iam_policy.workload_boundary.policy).Statement : s.Action if s.Sid == "ReadAndScopedRemediation"]), "s3:GetAccelerateConfiguration")
+    error_message = "the Config recorder role needs the S3 configuration reads"
+  }
 }
 
 run "other_regions_rejected" {

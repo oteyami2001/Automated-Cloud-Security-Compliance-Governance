@@ -374,3 +374,19 @@ def test_config_rule_variants() -> None:
     assert config_rule.handler(rule_event(None, params, "ScheduledNotification"), None, client) == {"evaluations": []}
     left = config_rule.handler(rule_event(sg_item([]), params, left=True), None, client)
     assert left["evaluations"][0]["ComplianceType"] == "NOT_APPLICABLE"
+
+
+@pytest.mark.parametrize(
+    ("configuration", "expected"),
+    [
+        ({}, "NON_COMPLIANT"),  # "Never expire": the managed rule would say COMPLIANT
+        ({"retentionInDays": 7}, "NON_COMPLIANT"),
+        ({"retentionInDays": 30}, "COMPLIANT"),
+        ({"RetentionInDays": 365}, "COMPLIANT"),
+    ],
+)
+def test_config_rule_log_retention_set(configuration: dict[str, Any], expected: str) -> None:
+    item = {"resourceType": "AWS::Logs::LogGroup", "resourceId": "/acscg/test", "configuration": configuration}
+    params = {"check": "log_retention_set", "minRetentionDays": "30"}
+    assert config_rule.evaluate_item(item, params)[0] == expected
+    assert config_rule.evaluate_item(sg_item([]), params)[0] == "NOT_APPLICABLE"

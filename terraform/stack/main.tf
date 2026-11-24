@@ -37,7 +37,7 @@ module "evidence_store" {
   account_id       = var.aws_account_id
   region           = var.region
   object_lock_days = var.object_lock_days
-  writer_role_arns = concat(values(module.compliance_engine.role_arns), [module.remediation.gatekeeper_role_arn])
+  writer_role_arns = concat(values(module.compliance_engine.role_arns), module.remediation[*].gatekeeper_role_arn)
   cleanup_role_arn = local.cleanup_role
   admin_role_arns  = [local.apply_role]
 }
@@ -63,8 +63,8 @@ module "compliance_engine" {
   kms_key_arn              = module.evidence_store.kms_key_arn
   topic_arn                = module.notifications.topic_arn
   policy_parameter_name    = local.policy_param
-  gatekeeper_function_name = local.gatekeeper
-  gatekeeper_function_arn  = local.gatekeeper_fn
+  gatekeeper_function_name = var.enable_remediation ? local.gatekeeper : ""
+  gatekeeper_function_arn  = var.enable_remediation ? local.gatekeeper_fn : ""
   remediation_mode         = local.policy_source.remediation_mode
   remediation_enabled      = local.policy_source.remediation_enabled
   allow_synthetic_events   = var.allow_synthetic_events
@@ -76,28 +76,26 @@ module "compliance_engine" {
 }
 
 module "remediation" {
-  source                     = "../modules/remediation"
-  name_prefix                = local.name_prefix
-  environment                = var.environment
-  account_id                 = var.aws_account_id
-  region                     = var.region
-  lambda_package_path        = var.lambda_package_path
-  runbooks_dir               = "${path.module}/../../runbooks"
-  policy_source              = local.policy_source
-  policy_parameter_name      = local.policy_param
-  approvers                  = var.approvers
-  project_inventory          = local.fixture_arns
-  approved_change_principals = [local.apply_role, local.cleanup_role]
-  project_role_arns          = concat(local.ci_roles, values(module.compliance_engine.role_arns))
-  table_name                 = module.compliance_engine.table_name
-  table_arn                  = module.compliance_engine.table_arn
-  evidence_bucket_name       = "${local.name_prefix}-evidence-${var.aws_account_id}-${var.region}"
-  kms_key_arn                = module.evidence_store.kms_key_arn
-  topic_arn                  = module.notifications.topic_arn
-  dlq_arn                    = module.compliance_engine.dlq_arn
-  config_rule_arns           = module.security_config.rule_arns
-  permissions_boundary_arn   = local.boundary_arn
-  log_retention_days         = var.log_retention_days
+  source                   = "../modules/remediation"
+  count                    = var.enable_remediation ? 1 : 0
+  name_prefix              = local.name_prefix
+  environment              = var.environment
+  account_id               = var.aws_account_id
+  region                   = var.region
+  lambda_package_path      = var.lambda_package_path
+  runbooks_dir             = "${path.module}/../../runbooks"
+  policy_source            = local.policy_source
+  policy_parameter_name    = aws_ssm_parameter.policy.name
+  policy_parameter_arn     = aws_ssm_parameter.policy.arn
+  table_name               = module.compliance_engine.table_name
+  table_arn                = module.compliance_engine.table_arn
+  evidence_bucket_name     = "${local.name_prefix}-evidence-${var.aws_account_id}-${var.region}"
+  kms_key_arn              = module.evidence_store.kms_key_arn
+  topic_arn                = module.notifications.topic_arn
+  dlq_arn                  = module.compliance_engine.dlq_arn
+  config_rule_arns         = module.security_config.rule_arns
+  permissions_boundary_arn = local.boundary_arn
+  log_retention_days       = var.log_retention_days
 }
 
 # ------------------------------------------------------------------ detection sources
@@ -161,7 +159,7 @@ module "dashboard" {
   name_prefix = local.name_prefix
   region      = var.region
   function_names = merge(module.compliance_engine.function_names, {
-    remediation-gatekeeper = module.remediation.gatekeeper_function_name
+    for m in module.remediation : "remediation-gatekeeper" => m.gatekeeper_function_name
   })
   processor_log_group = module.compliance_engine.log_group_names["findings-processor"]
   dlq_name            = module.compliance_engine.dlq_name
