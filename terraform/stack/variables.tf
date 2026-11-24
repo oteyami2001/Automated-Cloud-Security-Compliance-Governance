@@ -135,7 +135,7 @@ variable "fixture_open_ssh" {
 }
 
 variable "fixture_bucket_bpa_gap" {
-  description = "Scenario 4: disable one bucket-level BPA setting on the EMPTY fixture bucket (account-level BPA still blocks public access)."
+  description = "Scenario 4: disable one bucket-level BPA setting on the EMPTY fixture bucket. It stays private: ACLs are disabled and its only policy is a Deny (no account-level BPA exists, discovery D13)."
   type        = bool
   default     = false
 }
