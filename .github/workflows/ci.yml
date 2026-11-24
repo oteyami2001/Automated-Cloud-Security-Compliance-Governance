@@ -169,3 +169,18 @@ jobs:
         run: zizmor --offline --min-severity low .github/workflows
       - name: actionlint
         run: actionlint
+
+  ci-ok:
+    name: ci-ok
+    # Single required status check for the main-branch ruleset: green only if every job succeeded.
+    if: always()
+    needs: [python, terraform, tflint, checkov, trivy, workflow-security]
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: All CI jobs succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "job results: $RESULTS"
+          for r in $RESULTS; do [ "$r" = success ] || exit 1; done

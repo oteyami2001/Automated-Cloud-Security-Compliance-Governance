@@ -1,6 +1,6 @@
 # Bootstrap runbook
 
-**Status: §1 ready to run (read-only). §2–§4 are 📝 planned for Phase 3 and must not be run before approval.**
+**Status: §1 done (2026-11-24). Phase 3 approved 2026-11-24: §2 is ready to run; apply only after the plan review in step 4.**
 
 ## 1. Phase 0: read-only discovery in AWS CloudShell (run now)
 
@@ -33,16 +33,78 @@ bash acscg/scripts/discover_aws.sh us-east-2 us-east-1 > discovery-report-$(date
    Do **not** commit it. `discovery-report*.md` is git-ignored.
 6. Also tell me, separately: the account ID is the intended one (yes/no) and the Region is us-east-2 (yes/no).
 
-## 2. Phase 3 bootstrap (planned outline)
+## 2. Phase 3 bootstrap (approved 2026-11-24; run by the owner in CloudShell us-east-2)
 
-1. Pin Terraform in CloudShell (`~/bin/terraform`, checksum-verified, version fixed in `versions.tf`).
-2. `terraform -chdir=terraform/bootstrap init` (local state) → `plan -out` → **review with the owner** → `apply` the reviewed plan.
-3. Resources: state bucket (SSE-KMS, versioning, TLS-only policy, public access block, native S3
-   locking with `use_lockfile = true`), KMS key, OIDC roles (lookup of the existing provider),
-   permissions boundary, USD 25 tag-filtered budget.
-4. Migrate the bootstrap state to the new bucket (`backend.tf` from `backend.tf.example`, git-ignored).
-5. Activate the `Project` cost-allocation tag (Billing console. It can take up to 24 h to appear).
-6. `scripts/verify_bootstrap.sh`, with results and timestamps recorded in `docs/portfolio-evidence.md`.
+What it creates (about 20 resources, cents per month; nothing account-wide):
+
+| Resource | Purpose |
+|---|---|
+| `acscg-tfstate-<account>-us-east-2` + KMS key `alias/acscg-tfstate` | Encrypted, versioned, TLS-only state with native S3 locking |
+| IAM policy `acscg-workload-boundary` | Ceiling for every workload role the stack will create |
+| Roles `acscg-github-dev-plan`, `-dev-apply`, `-dev-cleanup`, `acscg-github-report` | GitHub OIDC roles, one immutable subject each. The existing OIDC provider is only looked up |
+| Budget `acscg-monthly` (USD 25, `Project=acscg`) | Alert at 50/80 % actual and 100 % forecast |
+
+It never touches the `aiops-*`/`idp-*` resources, the shared OIDC provider or the existing trail.
+`scripts/verify_bootstrap.sh` checks that afterwards.
+
+**Step 1: get the code (after PR #2 is merged, so `main` has the Phase 3 files).**
+
+```bash
+cd ~ && git clone --depth 1 https://github.com/oteyami2001/Automated-Cloud-Security-Compliance-Governance.git acscg-phase3 && cd acscg-phase3
+```
+
+**Step 2: install the pinned Terraform (checksum-verified, into `~/bin`).**
+
+```bash
+bash scripts/install_terraform.sh && export PATH=$HOME/bin:$PATH
+```
+
+**Step 3: set the inputs (never committed).** The account ID is read from your session. The
+script refuses to run if the two ever differ.
+
+```bash
+export TF_VAR_aws_account_id=$(aws sts get-caller-identity --query Account --output text)
+```
+
+```bash
+export TF_VAR_alert_email="you@example.com"
+```
+
+**Step 4: plan.** This creates nothing. It prints the planned addresses and actions plus a digest,
+with no account ID or e-mail. Share that output for review.
+
+```bash
+bash scripts/bootstrap.sh plan
+```
+
+**Step 5: apply, only after the plan has been reviewed and approved.** Only the saved plan whose
+digest matches is applied. A changed plan is refused.
+
+```bash
+bash scripts/bootstrap.sh apply <digest>
+```
+
+**Step 6: migrate the state into the new bucket, then remove the local copies.**
+
+```bash
+bash scripts/bootstrap.sh migrate
+```
+
+**Step 7: verify (read-only) and share the PASS/FAIL output.**
+
+```bash
+bash scripts/bootstrap.sh verify
+```
+
+Budget e-mails: AWS Budgets sends alerts to the address directly (no subscription confirmation).
+The tag filter needs the `Project` cost-allocation tag to be **Active**. The verify script prints
+its status. It is probably already active because the `idp` budget uses the same tag.
+
+## 2a. GitHub settings (owner, once)
+
+See `docs/github-settings.md`. Run `scripts/configure_github.sh` as the owner, then
+`scripts/verify_github_settings.sh`. The verify script must show `use_immutable_subject = true`.
+Otherwise the CI roles' trust policies (immutable IDs) will not match and must be adjusted before CI uses them.
 
 ## 3. Ownership decisions taken from discovery
 

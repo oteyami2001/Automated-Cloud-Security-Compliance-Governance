@@ -68,6 +68,18 @@ All results below were produced in the build environment without AWS credentials
 - `tflint --init` needs the GitHub API (blocked here). The ruleset was installed from its GitHub
   release after checksum verification. CI uses `tflint --init` with the workflow token.
 
+## Phase 3: secure bootstrap (approved 2026-11-24)
+
+| ID | Item | Evidence | Status |
+|---|---|---|---|
+| P3-1 | Owner and repository IDs for immutable OIDC subjects | GitHub search API: owner 157901928, repository 1465572625 (2026-11-24) | ✅ |
+| P3-2 | Provider lock files for bootstrap and stack | AWS provider 6.73.0, 5 platforms, zips checksum-verified against HashiCorp SHA256SUMS | ✅ |
+| P3-3 | Bootstrap tooling | `install_terraform.sh` (checksum), `bootstrap.sh` (account check, digest-bound apply of the saved plan), `verify_bootstrap.sh` (read-only). `tests/unit/test_phase3_scripts.py` | ✅ |
+| P3-4 | GitHub settings applied and verified | owner: `configure_github.sh`, then `verify_github_settings.sh` | ⏳ |
+| P3-5 | Bootstrap plan reviewed (summary + digest) | owner run of `bootstrap.sh plan` | ⏳ |
+| P3-6 | Bootstrap applied, state migrated | owner, after approval | ⏳ |
+| P3-7 | `verify_bootstrap.sh`: all checks passed | owner | ⏳ |
+
 ## Validation scenarios (Phase 9 target)
 
 See `docs/validation-scenarios.md`. Rows are filled in only as each scenario runs.
