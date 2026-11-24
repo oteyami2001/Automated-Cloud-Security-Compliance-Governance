@@ -26,4 +26,17 @@ run "alarms_notify_operators" {
     condition     = length(jsondecode(aws_cloudwatch_dashboard.this.dashboard_body).widgets) == 4
     error_message = "dashboard widgets"
   }
+  assert {
+    # CloudWatch: "metrics" must be an array of arrays of strings, with an optional renderer object last.
+    condition = alltrue(flatten([
+      for w in jsondecode(aws_cloudwatch_dashboard.this.dashboard_body).widgets : [
+        for m in try(w.properties.metrics, []) : !can(tostring(m)) && length(m) >= 2
+      ]
+    ]))
+    error_message = "every metric must be its own list (flatten() once merged them into one list of strings)"
+  }
+  assert {
+    condition     = length(jsondecode(aws_cloudwatch_dashboard.this.dashboard_body).widgets[1].properties.metrics) == 4
+    error_message = "two rows (invocations, errors) per function"
+  }
 }
