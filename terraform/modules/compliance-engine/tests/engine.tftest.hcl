@@ -73,6 +73,14 @@ run "engine_defaults" {
     condition     = alltrue([for g in aws_cloudwatch_log_group.function : g.retention_in_days == 30])
     error_message = "explicit log retention (SEC-014 applies to ourselves)"
   }
+  assert {
+    condition     = aws_lambda_function.this["findings-reconciler"].handler == "acscg.findings_processor.reconcile.lambda_handler" && aws_lambda_function.this["findings-reconciler"].reserved_concurrent_executions == 1
+    error_message = "one reconciler at a time (P4-13)"
+  }
+  assert {
+    condition     = aws_cloudwatch_event_rule.reconcile.schedule_expression == "rate(6 hours)"
+    error_message = "Config results are reconciled every 6 hours"
+  }
 }
 
 run "policy_parameter_name_validated" {

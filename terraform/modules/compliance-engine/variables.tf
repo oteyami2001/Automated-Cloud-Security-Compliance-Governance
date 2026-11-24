@@ -108,6 +108,12 @@ variable "deletion_protection" {
   default = false
 }
 
+variable "reconcile_schedule" {
+  description = "How often Config's current results are reconciled into the findings table."
+  type        = string
+  default     = "rate(6 hours)"
+}
+
 variable "report_schedule" {
   type    = string
   default = "cron(17 6 * * ? *)"

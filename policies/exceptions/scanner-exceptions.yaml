@@ -339,6 +339,12 @@ suppressions:
   justification: fixed bash checking this repository's script
   owner: oteyami2001
   review_by: '2027-05-01'
+- tool: ruff
+  rule: BLE001
+  path: src/acscg/findings_processor/reconcile.py
+  justification: one bad Config result must not stop the whole run; it is counted, logged, and the run then fails so the error alarm fires.
+  owner: oteyami2001
+  review_by: '2027-05-01'
 - tool: trivy
   rule: AVD-AWS-0067
   path: terraform/modules/security-config/main.tf

@@ -390,3 +390,47 @@ def test_config_rule_log_retention_set(configuration: dict[str, Any], expected: 
     params = {"check": "log_retention_set", "minRetentionDays": "30"}
     assert config_rule.evaluate_item(item, params)[0] == expected
     assert config_rule.evaluate_item(sg_item([]), params)[0] == "NOT_APPLICABLE"
+
+
+class FakeLogs:
+    def __init__(self, groups: list[dict[str, Any]], page: int = 2) -> None:
+        self.groups, self.page = groups, page
+
+    def describe_log_groups(self, **kwargs: Any) -> dict[str, Any]:
+        start = int(kwargs.get("nextToken", 0))
+        chunk = self.groups[start : start + self.page]
+        nxt = start + self.page
+        return {"logGroups": chunk, **({"nextToken": str(nxt)} if nxt < len(self.groups) else {})}
+
+
+def test_periodic_log_retention_lists_groups_itself_and_batches() -> None:
+    groups = [
+        {"logGroupName": "/never"},
+        {"logGroupName": "/short", "retentionInDays": 7},
+        {"logGroupName": "/ok", "retentionInDays": 30},
+    ]
+    groups += [{"logGroupName": f"/g{i}", "retentionInDays": 90} for i in range(150)]
+    config = FakeConfig()
+    event = {
+        "invokingEvent": json.dumps(
+            {"messageType": "ScheduledNotification", "notificationCreationTime": "2026-11-24T16:00:00.000Z"}
+        ),
+        "ruleParameters": json.dumps({"check": "log_retention_set", "minRetentionDays": "30"}),
+        "resultToken": "token",
+    }
+    out = config_rule.handler(event, None, config, FakeLogs(groups, page=50))
+    by_name = {e["ComplianceResourceId"]: e["ComplianceType"] for e in out["evaluations"]}
+    assert (
+        by_name["/never"] == "NON_COMPLIANT" and by_name["/short"] == "NON_COMPLIANT" and by_name["/ok"] == "COMPLIANT"
+    )
+    assert len(by_name) == 153
+    assert [len(c["Evaluations"]) for c in config.calls] == [100, 53]  # PutEvaluations limit
+    assert all(e["OrderingTimestamp"] == "2026-11-24T16:00:00.000Z" for e in out["evaluations"])
+
+
+def test_scheduled_notification_for_other_checks_is_still_ignored() -> None:
+    client = FakeConfig()
+    assert config_rule.handler(
+        rule_event(None, {"check": "open_admin_port"}, "ScheduledNotification"), None, client
+    ) == {"evaluations": []}
+    assert client.calls == []
