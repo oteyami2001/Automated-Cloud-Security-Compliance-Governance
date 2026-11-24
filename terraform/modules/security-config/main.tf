@@ -42,6 +42,8 @@ locals {
   custom_rules = !var.enable_custom_rules ? {} : {
     "sec005-admin-port-custom" = { control = "SEC-005", types = ["AWS::EC2::SecurityGroup"], params = { check = "open_admin_port", controlId = "SEC-005" } }
     "sec006-admin-port-custom" = { control = "SEC-006", types = ["AWS::EC2::SecurityGroup"], params = { check = "open_admin_port", controlId = "SEC-006" } }
+    # REQUIRED_TAGS gives no annotation; this names the missing keys and checks allowed values (scenario 3).
+    "sec013-tags-custom" = { control = "SEC-013", types = ["AWS::S3::Bucket", "AWS::EC2::SecurityGroup", "AWS::EC2::Volume", "AWS::EC2::Instance", "AWS::DynamoDB::Table"], params = { check = "required_tags", requiredTags = "Project,Environment,Owner,ManagedBy,DataClassification" } }
     # Periodic: Config records no log groups here (evidence P4-14); the evaluator lists them itself.
     "sec014-retention-set" = { control = "SEC-014", types = [], params = { check = "log_retention_set", minRetentionDays = tostring(var.min_log_retention_days) } }
   }

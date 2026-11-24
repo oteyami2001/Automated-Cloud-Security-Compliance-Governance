@@ -308,3 +308,72 @@ def test_processing_failure_releases_idempotency_claim(harness: Harness) -> None
         harness.processor.process(event)
     outcome = harness.processor.process(event)  # EventBridge retry
     assert outcome.processed == 1 and outcome.duplicates == 0
+
+
+def test_one_compliant_rule_cannot_close_a_violation_another_rule_sees(report_only_harness: Harness) -> None:
+    """SEC-001 has several rules. Found in AWS (P5-10): last-writer-wins could resolve a live violation."""
+    h = report_only_harness
+    bpa = "acscg-sec001-bucket-public-access"
+    read = "acscg-sec001-public-read"
+    h.processor.process(
+        config_event(rule=bpa, resource_type="AWS::S3::Bucket", resource_id=BUCKET, compliance="NON_COMPLIANT")
+    )
+    h.processor.process(
+        config_event(rule=read, resource_type="AWS::S3::Bucket", resource_id=BUCKET, compliance="COMPLIANT")
+    )
+    (item,) = h.store.all_findings()
+    assert item["compliance"] == "NON_COMPLIANT" and item["state"] == "REPORTED"
+    assert item["rule_results"][bpa]["compliance"] == "NON_COMPLIANT"
+    assert item["rule_results"][read]["compliance"] == "COMPLIANT"
+    # Resolves only once every rule that reported is compliant.
+    h.processor.process(
+        config_event(rule=bpa, resource_type="AWS::S3::Bucket", resource_id=BUCKET, compliance="COMPLIANT")
+    )
+    (item,) = h.store.all_findings()
+    assert item["compliance"] == "COMPLIANT" and item["state"] == "RESOLVED_EXTERNALLY"
+
+
+def test_annotation_of_the_failing_rule_survives_a_silent_rule(report_only_harness: Harness) -> None:
+    """Scenario 3: the custom tag rule names the missing keys; REQUIRED_TAGS gives no annotation."""
+    h = report_only_harness
+    custom = config_event(rule="acscg-sec013-tags-custom", compliance="NON_COMPLIANT")
+    custom["detail"]["newEvaluationResult"]["annotation"] = "missing: Owner,ManagedBy,DataClassification"
+    h.processor.process(custom)
+    managed = config_event(rule="acscg-sec013-required-tags", compliance="NON_COMPLIANT")
+    managed["detail"]["newEvaluationResult"]["annotation"] = ""  # REQUIRED_TAGS gives none
+    h.processor.process(managed)
+    (item,) = h.store.all_findings()
+    assert item["annotation"] == "acscg-sec013-tags-custom: missing: Owner,ManagedBy,DataClassification"
+
+
+def test_legacy_finding_without_rule_results_keeps_its_violation(report_only_harness: Harness) -> None:
+    h = report_only_harness
+    h.processor.process(
+        config_event(rule="acscg-sec001-bucket-public-access", resource_type="AWS::S3::Bucket", resource_id=BUCKET)
+    )
+    (item,) = h.store.all_findings()
+    item.pop("rule_results")  # as stored before this change
+    h.store.findings[item["finding_key"]] = item
+    h.processor.process(
+        config_event(
+            rule="acscg-sec001-public-read", resource_type="AWS::S3::Bucket", resource_id=BUCKET, compliance="COMPLIANT"
+        )
+    )
+    (item,) = h.store.all_findings()
+    assert item["compliance"] == "NON_COMPLIANT" and item["state"] == "REPORTED"
+
+
+@pytest.mark.parametrize(
+    ("values", "expected"),
+    [
+        (["COMPLIANT", "INSUFFICIENT_DATA"], "COMPLIANT"),
+        (["NOT_APPLICABLE"], "NOT_APPLICABLE"),
+        (["INSUFFICIENT_DATA", "NOT_APPLICABLE"], "INSUFFICIENT_DATA"),
+        (["COMPLIANT", "NON_COMPLIANT", "NOT_APPLICABLE"], "NON_COMPLIANT"),
+    ],
+)
+def test_aggregate_compliance(values: list[str], expected: str) -> None:
+    from acscg.findings_processor.processor import aggregate_compliance
+
+    results = {f"rule-{i}": {"compliance": v} for i, v in enumerate(values)}
+    assert aggregate_compliance(results) == expected
