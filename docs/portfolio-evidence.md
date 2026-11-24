@@ -75,10 +75,12 @@ All results below were produced in the build environment without AWS credentials
 | P3-1 | Owner and repository IDs for immutable OIDC subjects | GitHub search API: owner 157901928, repository 1465572625 (2026-11-24) | ✅ |
 | P3-2 | Provider lock files for bootstrap and stack | AWS provider 6.73.0, 5 platforms, zips checksum-verified against HashiCorp SHA256SUMS | ✅ |
 | P3-3 | Bootstrap tooling | `install_terraform.sh` (checksum), `bootstrap.sh` (account check, digest-bound apply of the saved plan), `verify_bootstrap.sh` (read-only). `tests/unit/test_phase3_scripts.py` | ✅ |
-| P3-4 | GitHub settings applied and verified | owner: `configure_github.sh`, then `verify_github_settings.sh` | ⏳ |
-| P3-5 | Bootstrap plan reviewed (summary + digest) | owner run of `bootstrap.sh plan` | ⏳ |
-| P3-6 | Bootstrap applied, state migrated | owner, after approval | ⏳ |
-| P3-7 | `verify_bootstrap.sh`: all checks passed | owner | ⏳ |
+| P3-4 | GitHub settings applied and verified | `configure_github.sh` then `verify_github_settings.sh` at **2026-11-24T12:51:56Z: `RESULT: all checks passed`**. Default branch `main`, secret scanning + push protection, Dependabot, read-only token, ruleset (PR + `ci-ok`, no force push/deletion), environments `dev-plan`/`dev`/`dev-cleanup` (main only; reviewer on dev and dev-cleanup), `use_immutable_subject: true` with prefix `repo:oteyami2001@157901928/Automated-Cloud-Security-Compliance-Governance@1465572625` | ☁️ |
+| P3-5 | Bootstrap plan reviewed (summary + digest) | `Plan: 20 to add, 0 to change, 0 to destroy.` 9 state resources, boundary, 4 CI roles + 4 inline policies + ReadOnlyAccess on dev-plan, budget. Nothing changed or destroyed. Digest `40a4f9f0…0c536f`, reviewed and approved 2026-11-24 | ☁️ |
+| P3-6 | Bootstrap applied, state migrated | `Plan digest matches the reviewed plan.` → `Apply complete! Resources: 20 added, 0 changed, 0 destroyed.` State migrated to the bucket (object SSE `aws:kms`). Local state files removed (2026-11-24, before 13:18 UTC) | ☁️ |
+| P3-7 | `verify_bootstrap.sh`: all checks passed | **2026-11-24T13:18:39Z: 17/17 PASS, `RESULT: all checks passed`**: state bucket (versioning, SSE-KMS, public access blocked, TLS-only), key rotation, boundary, each CI role trusts exactly one immutable subject, plan role read-only, budget filter, shared OIDC provider + `aiops`/`idp` roles + existing trail untouched | ☁️ |
+| P3-8 | Cost-allocation tag `Project` | `not found` at 13:18 UTC: new tags can take up to 24 h to appear, and in an Organization activation is usually done from the management account. Until active, the account-wide `aiops-account-monthly` budget (USD 30) is the backstop | ⏳ |
+| P3-9 | Issue found during the run | CloudShell's 1 GB home cannot hold the ~700 MB AWS provider (`no space left on device`). Fixed: `bootstrap.sh` keeps `.terraform` in `/tmp` via `TF_DATA_DIR` | ✅ |
 
 ## Validation scenarios (Phase 9 target)
 
