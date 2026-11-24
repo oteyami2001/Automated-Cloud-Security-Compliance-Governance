@@ -35,6 +35,13 @@ jobs:
           EXPECTED_DIGEST: ${{ inputs.digest }}
         run: |
           [[ $EXPECTED_DIGEST =~ ^[0-9a-f]{64}$ ]] || { echo "::error::digest must be 64 lowercase hex characters"; exit 1; }
+      - name: Environment secrets present
+        env:
+          ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+        run: |
+          [[ $ACCOUNT_ID =~ ^[0-9]{12}$ ]] || { echo "::error::secret AWS_ACCOUNT_ID is missing or not 12 digits in this environment"; exit 1; }
+          [ -n "$ALERT_EMAIL" ] || { echo "::error::secret ALERT_EMAIL is missing in this environment"; exit 1; }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false

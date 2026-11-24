@@ -69,3 +69,12 @@ def test_tf_ci_uses_the_bootstrap_state_backend() -> None:
     ):
         assert setting in script
     assert 'plan_guard.py" verify' in script  # apply only after the digest matched
+
+
+@pytest.mark.parametrize("name", ["terraform-plan.yml", "terraform-apply.yml"])
+def test_missing_environment_secrets_fail_fast(name: str) -> None:
+    (job,) = load(name)["jobs"].values()
+    names = [s.get("name", s.get("uses", "")) for s in job["steps"]]
+    check = names.index("Environment secrets present")
+    login = next(i for i, n in enumerate(names) if n.startswith("aws-actions/configure-aws-credentials@"))
+    assert check < login
