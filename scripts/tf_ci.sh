@@ -32,6 +32,8 @@ fi
 REGION=${AWS_REGION:-us-east-2}
 [[ $REGION =~ ^[a-z]{2}-[a-z]+-[0-9]$ ]] || { echo "::error::invalid AWS_REGION"; exit 2; }
 
+redact() { sed -E -e 's/[0-9]{12}/***/g' -e 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/<email>/g'; }
+
 init() {
   terraform -chdir="$STACK" init -input=false -no-color -reconfigure \
     -backend-config="bucket=acscg-tfstate-${TF_VAR_aws_account_id}-${REGION}" \
@@ -80,8 +82,14 @@ case "$CMD" in
     [[ ${EXPECTED_DIGEST:-} =~ ^[0-9a-f]{64}$ ]] || { echo "::error::EXPECTED_DIGEST must be 64 lowercase hex"; exit 2; }
     plan
     python3 "$ROOT/scripts/plan_guard.py" verify "$WORK/plan.json" --mode "$MODE" --expected "$EXPECTED_DIGEST"
-    terraform -chdir="$STACK" apply -input=false -lock-timeout=120s -no-color "$WORK/tfplan" 2>&1 |
-      grep -E '^(Apply complete|Destroy complete|Error)' | sed -E 's/[0-9]{12}/***/g'
+    if terraform -chdir="$STACK" apply -input=false -lock-timeout=120s -no-color "$WORK/tfplan" >"$WORK/apply.log" 2>&1; then
+      grep -E '^(Apply complete|Destroy complete)' "$WORK/apply.log"
+    else
+      # Print each error block (summary, address, provider message) without account IDs or e-mails.
+      sed -n '/^Error/,$p' "$WORK/apply.log" | redact | head -80
+      echo "Resources completed before the error: $(grep -cE ': Creation complete|: Modifications complete|: Destruction complete' "$WORK/apply.log")"
+      exit 1
+    fi
     ;;
   drift)
     set +e
