@@ -1,0 +1,53 @@
+%% Security event flow: noncompliant security group (SEC-005), Mode 3 human-approved remediation.
+sequenceDiagram
+  autonumber
+  participant CFG as AWS Config
+  participant EB as EventBridge (default bus)
+  participant FP as findings-processor (Lambda)
+  participant DDB as DynamoDB
+  participant S3 as Evidence bucket (S3)
+  participant SNS as SNS security-alerts
+  participant GK as remediation-gatekeeper (Lambda)
+  participant SSM as SSM Automation
+  actor OP as Approver (IAM principal)
+
+  CFG->>EB: Config Rules Compliance Change (NON_COMPLIANT, sg-…)
+  EB->>FP: rule acscg-config-compliance (source = aws.config only)
+  FP->>FP: validate schema, normalise, classify severity (high)
+  FP->>DDB: conditional put idempotency key = event id
+  alt event already processed
+    DDB-->>FP: ConditionalCheckFailed
+    FP->>FP: log duplicate, stop (no notification, no remediation)
+  else first time
+    FP->>DDB: upsert finding (finding_key = sha256(control|account|region|resource)), state OPEN
+    FP->>S3: evidence: detection record + SHA-256
+    FP->>SNS: notify (one per finding state change)
+    FP->>GK: remediation request (async)
+    GK->>GK: mode? enabled flag? allowlist(account, region, ARN, control, action)?
+    alt not authorised
+      GK->>DDB: state REJECTED_POLICY (reason)
+      GK->>S3: evidence: rejection
+    else authorised and Mode 3
+      GK->>GK: live re-read (DescribeSecurityGroupRules): rule still present?
+      GK->>DDB: conditional put remediation lock (one active execution per finding)
+      GK->>SSM: StartAutomationExecution(restrict-security-group, rule id)
+      SSM->>SNS: aws:approve request (finding, rule, proposed change)
+      SNS->>OP: e-mail (no approve link, approval needs IAM sign-in)
+      OP->>SSM: SendAutomationSignal Approve | Reject (+ comment)
+      alt rejected or timed out
+        SSM-->>EB: execution Failed/Cancelled
+        EB->>FP: status event
+        FP->>DDB: state REMEDIATION_REJECTED (finding stays OPEN)
+      else approved
+        SSM->>SSM: revoke exactly one ingress rule
+        SSM->>CFG: StartConfigRulesEvaluation
+        SSM->>SSM: verify: rule absent, other rules unchanged
+        SSM-->>EB: execution Success
+        EB->>FP: status event
+        FP->>CFG: GetComplianceDetailsByResource
+        FP->>DDB: state VERIFIED_RESOLVED
+        FP->>S3: evidence: approval identity, execution result, verification, checksum
+        FP->>SNS: resolved notification
+      end
+    end
+  end

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ACSCG control exceptions",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["exceptions"],
+  "properties": {
+    "exceptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["control_id", "resource_arn", "reason", "ticket", "approver", "expires_at"],
+        "properties": {
+          "control_id": {"type": "string", "pattern": "^SEC-\\d{3}$"},
+          "resource_arn": {"type": "string", "pattern": "^arn:aws"},
+          "reason": {"type": "string", "minLength": 10},
+          "ticket": {"type": "string", "minLength": 3},
+          "approver": {"type": "string", "minLength": 3},
+          "expires_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    }
+  }
+}

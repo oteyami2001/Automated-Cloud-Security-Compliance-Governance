@@ -1,0 +1,4 @@
+# Security scanners (separate CI job and virtualenv: Checkov pins its own boto3).
+checkov==3.4.3
+zizmor==1.32.0
+actionlint-py==1.7.12.25

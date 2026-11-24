@@ -1,0 +1,705 @@
+# Security control catalog: Automated Cloud Security, Compliance & Governance (ACSCG)
+#
+# Source of truth for the 15 initial controls. Validated by scripts/validate_catalog.py against
+# controls/schema/control-catalog.schema.json and against the framework reference files in this
+# directory (every mapped requirement ID must exist there).
+#
+# Status vocabulary (ADR 0001): planned | implemented | tested-offline | verified-in-aws.
+# All controls are "planned" at the end of Phase 1. Nothing here is deployed.
+#
+# Remediation eligibility:
+#   report_only     - never changes the resource; detect, record, notify
+#   auto_low_risk   - Mode 2: may run automatically ONLY when remediation is enabled for the
+#                     environment AND the exact resource is on the remediation allowlist
+#   human_approval  - Mode 3: runs only after an authorised human approves the specific request
+#   escalate        - never remediated by this platform; paged to a human (e.g. audit services)
+#
+# Framework mapping relationship (see docs/compliance-mapping.md):
+#   direct     - the technical check evaluates the substance of the requirement
+#   partial    - the check covers a technical part; organisational/procedural parts remain
+#   supporting - the check produces evidence that supports the requirement; it does not meet it
+#
+# Security Hub CSPM control IDs and AWS Config managed-rule identifiers below are recorded from
+# the author's knowledge and are marked verification: pending. The AWS documentation hosts were
+# not reachable from the Phase 1 build environment. They must be confirmed against the Security
+# Hub CSPM controls reference and the Config managed rules list before Phase 4 (see
+# docs/compliance-mapping.md, "Verification log").
+
+catalog:
+  name: acscg-control-catalog
+  version: 0.1.0
+  status: draft
+  owner: oteyami2001
+  last_reviewed: "2026-11-24"
+  defaults:
+    remediation_mode: report_only
+    exception_max_days: 90
+    required_tags: [Project, Environment, Owner, ManagedBy, DataClassification]
+
+controls:
+  - id: SEC-001
+    title: S3 public access protection
+    domain: data-protection
+    description: >-
+      S3 Block Public Access is enabled at the account level and on every bucket, and no bucket
+      policy or ACL grants access to anonymous or all-AWS-users principals.
+    rationale: >-
+      Publicly readable or writable buckets are the most common cause of cloud data exposure. For
+      a financial services company, one public bucket holding customer data is a reportable
+      incident.
+    resource_types: [AWS::S3::Bucket, AWS::S3::AccountPublicAccessBlock]
+    severity: high
+    severity_escalation: "critical when the bucket policy or ACL actually grants public read/write"
+    detection:
+      method: config_managed_rule
+      config_managed_rules:
+        - S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED
+        - S3_ACCOUNT_LEVEL_PUBLIC_ACCESS_BLOCKS_PERIODIC
+        - S3_BUCKET_PUBLIC_READ_PROHIBITED
+        - S3_BUCKET_PUBLIC_WRITE_PROHIBITED
+      securityhub_controls: [S3.1, S3.2, S3.3, S3.8]
+      access_analyzer: external-access findings for S3 buckets (when an analyzer exists)
+      verification: pending
+    evaluation_logic: >-
+      NON_COMPLIANT if any of the four bucket-level Block Public Access settings is false, or if
+      the effective bucket policy or ACL grants Principal "*" or the AllUsers/AuthenticatedUsers
+      groups without a restricting condition. The account-level block is evaluated separately and
+      reported, but never changed by this platform.
+    remediation:
+      eligibility: auto_low_risk
+      action: Enable all four bucket-level Block Public Access settings (s3:PutBucketPublicAccessBlock)
+      runbook: runbooks/enable-s3-protection.yaml
+      scope: allowlisted project-owned test buckets only
+      never: [account-level public access block, buckets not on the allowlist, bucket policies, objects]
+      preconditions:
+        - Resource ARN, account and Region match an allowlist entry for SEC-001
+        - Live re-read of the bucket confirms the violation still exists
+        - Bucket is not an evidence, state or log-delivery bucket
+      rollback: Restore the previous PublicAccessBlockConfiguration captured before the change
+    approval:
+      required: false
+      condition: "Mode 2 only when remediation_enabled=true for the environment and the bucket is allowlisted; otherwise report-only"
+    evidence_requirements:
+      - Config evaluation result (before and after) with timestamps
+      - PublicAccessBlockConfiguration before and after (JSON)
+      - Allowlist entry identifier that authorised the change
+    frameworks:
+      nist_800_53_r5: [AC-3, AC-4, AC-6, SC-7]
+      cis_aws_v5_0_0: ["2.1.4"]
+      cis_aws_v6_0_0: ["3.1.4"]
+      pci_dss_v4_0_1: ["1.3.1", "1.4.2", "7.2.1"]
+      soc2_tsc_2017: [CC6.1, CC6.6]
+    mapping_relationship: partial
+    exception_policy:
+      allowed: true
+      requires: Documented business need (e.g. a public static website), security owner approval, compensating controls (CloudFront OAC), expiry no later than 90 days
+    verification:
+      procedure: >-
+        Run the Config rule evaluation again (StartConfigRulesEvaluation) and confirm COMPLIANT,
+        then read GetPublicAccessBlock directly and compare with the expected configuration.
+      expected: COMPLIANT within one evaluation cycle; all four settings true
+    implementation_status: implemented
+
+  - id: SEC-002
+    title: S3 default encryption
+    domain: data-protection
+    description: >-
+      Every bucket has default server-side encryption. Buckets classified Confidential or above use
+      SSE-KMS with a customer managed key.
+    rationale: >-
+      Encryption at rest limits the impact of media loss and of misconfigured storage access.
+      Since January 2023 S3 applies SSE-S3 to new objects by default, so the control focuses on
+      the stronger SSE-KMS requirement for classified data.
+    resource_types: [AWS::S3::Bucket]
+    severity: medium
+    detection:
+      method: config_managed_rule
+      config_managed_rules: [S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED, S3_DEFAULT_ENCRYPTION_KMS]
+      securityhub_controls: [S3.17]
+      verification: pending
+    evaluation_logic: >-
+      NON_COMPLIANT if no default encryption rule exists, or if the bucket is tagged
+      DataClassification in {confidential, restricted} and the default algorithm is not aws:kms.
+      The classification tag only selects the stricter rule; it never relaxes it.
+    remediation:
+      eligibility: report_only
+      rationale: Changing encryption keys or algorithms is listed as a prohibited automatic change (encryption keys).
+    approval:
+      required: false
+    evidence_requirements:
+      - Config evaluation result with timestamp
+      - GetBucketEncryption output (algorithm and key ARN with the account ID redacted in reports)
+    frameworks:
+      nist_800_53_r5: [SC-13, SC-28, SC-28(1)]
+      cis_aws_v5_0_0: []
+      cis_aws_v6_0_0: []
+      pci_dss_v4_0_1: ["3.5.1"]
+      soc2_tsc_2017: [CC6.1]
+    mapping_relationship: partial
+    mapping_notes: >-
+      No current CIS AWS Foundations recommendation covers S3 default encryption (CIS removed it
+      after S3 made SSE-S3 the default). PCI DSS 3.5.1 applies only when the bucket stores PAN.
+    exception_policy:
+      allowed: true
+      requires: Data classification of public or internal and security owner approval; expiry no later than 90 days
+    verification:
+      procedure: Re-evaluate the Config rule; read GetBucketEncryption
+      expected: COMPLIANT
+    implementation_status: implemented
+
+  - id: SEC-003
+    title: S3 versioning
+    domain: data-protection
+    description: Buckets holding audit evidence, Terraform state or business records have versioning enabled.
+    rationale: >-
+      Versioning keeps previous object versions after accidental or malicious overwrite or
+      deletion. It is also a prerequisite for S3 Object Lock and MFA Delete.
+    resource_types: [AWS::S3::Bucket]
+    severity: low
+    severity_escalation: "high for buckets tagged DataClassification=audit-evidence"
+    detection:
+      method: config_managed_rule
+      config_managed_rules: [S3_BUCKET_VERSIONING_ENABLED]
+      securityhub_controls: [S3.14]
+      verification: pending
+    evaluation_logic: NON_COMPLIANT if the versioning status is not Enabled
+    remediation:
+      eligibility: report_only
+      rationale: Enabling versioning has a permanent effect (it can be suspended, never removed) and changes storage cost. A human decides.
+    approval:
+      required: false
+    evidence_requirements: [Config evaluation result, GetBucketVersioning output]
+    frameworks:
+      nist_800_53_r5: [CP-9, CP-10]
+      cis_aws_v5_0_0: []
+      cis_aws_v6_0_0: []
+      pci_dss_v4_0_1: ["10.3.3"]
+      soc2_tsc_2017: [A1.2]
+    mapping_relationship: supporting
+    mapping_notes: >-
+      CIS 2.1.2 (v5) / 3.1.2 (v6) MFA Delete depends on versioning, but versioning alone does not
+      meet it, so it is not mapped. PCI 10.3.3 applies only to buckets that store audit logs.
+      SOC 2 A1.2 applies only when the Availability category is in scope.
+    exception_policy:
+      allowed: true
+      requires: Bucket holds only reproducible or temporary data; expiry no later than 90 days
+    verification:
+      procedure: Re-evaluate the Config rule; read GetBucketVersioning
+      expected: Status=Enabled
+    implementation_status: implemented
+
+  - id: SEC-004
+    title: S3 HTTPS-only access
+    domain: data-protection
+    description: Bucket policies deny any request made without TLS (aws:SecureTransport = false).
+    rationale: Stops credentials and data from crossing the network in clear text, including through misconfigured clients.
+    resource_types: [AWS::S3::Bucket]
+    severity: medium
+    detection:
+      method: config_managed_rule
+      config_managed_rules: [S3_BUCKET_SSL_REQUESTS_ONLY]
+      securityhub_controls: [S3.5]
+      verification: pending
+    evaluation_logic: NON_COMPLIANT unless the bucket policy has an explicit Deny on s3:* for all principals when aws:SecureTransport is false
+    remediation:
+      eligibility: report_only
+      rationale: Editing a bucket policy can lock out legitimate principals. Merging a policy automatically is not low risk.
+    approval:
+      required: false
+    evidence_requirements: [Config evaluation result, Bucket policy statement IDs (not full policy) before/after]
+    frameworks:
+      nist_800_53_r5: [AC-17(2), SC-8, SC-8(1)]
+      cis_aws_v5_0_0: ["2.1.1"]
+      cis_aws_v6_0_0: ["3.1.1"]
+      pci_dss_v4_0_1: ["4.2.1"]
+      soc2_tsc_2017: [CC6.7]
+    mapping_relationship: direct
+    mapping_notes: PCI DSS 4.2.1 concerns PAN transmitted over open, public networks; it applies only when the bucket holds PAN.
+    exception_policy:
+      allowed: false
+    verification:
+      procedure: Re-evaluate; attempt an HTTP (non-TLS) GetObject on a test bucket from the validation script and expect AccessDenied
+      expected: COMPLIANT and non-TLS request denied
+    implementation_status: implemented
+
+  - id: SEC-005
+    title: Unrestricted SSH ingress
+    domain: network-security
+    description: No security group allows inbound TCP 22 from 0.0.0.0/0 or ::/0.
+    rationale: SSH open to the internet is constantly scanned and brute-forced. Administrative access should go through Session Manager or a restricted CIDR.
+    resource_types: [AWS::EC2::SecurityGroup]
+    severity: high
+    detection:
+      method: config_managed_rule
+      config_managed_rules: [INCOMING_SSH_DISABLED]
+      securityhub_controls: [EC2.13, EC2.53, EC2.54]
+      custom_evaluator: src/compliance_evaluator (IPv6 ::/0 and port ranges that include 22)
+      verification: pending
+    evaluation_logic: >-
+      NON_COMPLIANT if any ingress permission with IpProtocol tcp or -1 has a port range that
+      includes 22 and a source of 0.0.0.0/0 or ::/0.
+    remediation:
+      eligibility: human_approval
+      action: Revoke only the offending ingress rule, by security-group-rule ID (ec2:RevokeSecurityGroupIngress)
+      runbook: runbooks/restrict-security-group.yaml
+      scope: allowlisted project-owned test security groups only
+      never: [default security groups of existing VPCs, security groups attached to running production workloads, any other rule in the group]
+      preconditions:
+        - Resource ARN, account and Region match an allowlist entry for SEC-005
+        - Live DescribeSecurityGroupRules confirms the exact rule still exists
+        - Group is not attached to an ENI outside the project (DescribeNetworkInterfaces)
+      rollback: Re-authorise the captured rule (same protocol, ports, CIDR, description). Only on operator request.
+    approval:
+      required: true
+      approvers: IAM principals listed in the remediation policy (never the CI roles or the automation role)
+      timeout: 4h, then the request expires and the finding stays open
+    evidence_requirements:
+      - Offending rule (ID, protocol, port range, CIDR) before the change
+      - Approval record (approver principal, decision, timestamp, comment)
+      - SSM Automation execution ID and step outcomes
+      - Post-change DescribeSecurityGroupRules and Config re-evaluation
+    frameworks:
+      nist_800_53_r5: [AC-17, CM-7, SC-7, SC-7(5)]
+      cis_aws_v5_0_0: ["5.3", "5.4"]
+      cis_aws_v6_0_0: ["6.3", "6.4"]
+      pci_dss_v4_0_1: ["1.2.5", "1.3.1", "1.4.2"]
+      soc2_tsc_2017: [CC6.6]
+    mapping_relationship: direct
+    exception_policy:
+      allowed: true
+      requires: Bastion pattern rejected in favour of Session Manager; temporary exception only, max 7 days, named owner
+    verification:
+      procedure: Re-evaluate the Config rule and re-describe the group; confirm only the offending rule was removed (rule count -1, others unchanged)
+      expected: COMPLIANT; all other rules byte-identical
+    implementation_status: implemented
+
+  - id: SEC-006
+    title: Unrestricted RDP ingress
+    domain: network-security
+    description: No security group allows inbound TCP 3389 from 0.0.0.0/0 or ::/0.
+    rationale: RDP exposed to the internet is a leading ransomware entry point.
+    resource_types: [AWS::EC2::SecurityGroup]
+    severity: high
+    detection:
+      method: config_managed_rule
+      config_managed_rules: [RESTRICTED_INCOMING_TRAFFIC]
+      config_rule_parameters: {blockedPort1: "3389"}
+      securityhub_controls: [EC2.14, EC2.53, EC2.54]
+      custom_evaluator: src/compliance_evaluator (IPv6 ::/0 and port ranges that include 3389)
+      verification: pending
+    evaluation_logic: NON_COMPLIANT if any ingress permission (tcp or -1) covering port 3389 has source 0.0.0.0/0 or ::/0
+    remediation:
+      eligibility: human_approval
+      action: Revoke only the offending ingress rule by security-group-rule ID
+      runbook: runbooks/restrict-security-group.yaml
+      scope: allowlisted project-owned test security groups only
+      never: [default security groups of existing VPCs, groups attached outside the project, any other rule]
+      preconditions: [Same as SEC-005]
+      rollback: Re-authorise the captured rule on operator request
+    approval:
+      required: true
+      approvers: IAM principals listed in the remediation policy
+      timeout: 4h
+    evidence_requirements: [Same as SEC-005]
+    frameworks:
+      nist_800_53_r5: [AC-17, CM-7, SC-7, SC-7(5)]
+      cis_aws_v5_0_0: ["5.3", "5.4"]
+      cis_aws_v6_0_0: ["6.3", "6.4"]
+      pci_dss_v4_0_1: ["1.2.5", "1.3.1", "1.4.2"]
+      soc2_tsc_2017: [CC6.6]
+    mapping_relationship: direct
+    exception_policy:
+      allowed: true
+      requires: Same as SEC-005
+    verification:
+      procedure: Same as SEC-005
+      expected: COMPLIANT; all other rules unchanged
+    implementation_status: implemented
+
+  - id: SEC-007
+    title: Unencrypted EBS volumes
+    domain: data-protection
+    description: EBS encryption by default is enabled in the Region, and every EBS volume is encrypted.
+    rationale: Snapshots and volumes of unencrypted disks can be copied or shared without key-level control.
+    resource_types: [AWS::EC2::Volume, AWS::::Account]
+    severity: medium
+    detection:
+      method: config_managed_rule
+      config_managed_rules: [ENCRYPTED_VOLUMES, EC2_EBS_ENCRYPTION_BY_DEFAULT]
+      securityhub_controls: [EC2.3, EC2.7]
+      verification: pending
+    evaluation_logic: NON_COMPLIANT if a volume has Encrypted=false, or if GetEbsEncryptionByDefault is false in the Region
+    remediation:
+      eligibility: report_only
+      rationale: >-
+        Volumes cannot be encrypted in place (snapshot, copy, replace). Turning on encryption by
+        default is an account-wide setting. Both are on the prohibited automatic-change list.
+    approval:
+      required: false
+    evidence_requirements: [Config evaluation result, DescribeVolumes Encrypted flag, GetEbsEncryptionByDefault]
+    frameworks:
+      nist_800_53_r5: [SC-28, SC-28(1)]
+      cis_aws_v5_0_0: ["5.1.1"]
+      cis_aws_v6_0_0: ["6.1.1"]
+      pci_dss_v4_0_1: ["3.5.1"]
+      soc2_tsc_2017: [CC6.1]
+    mapping_relationship: partial
+    exception_policy:
+      allowed: true
+      requires: Volume holds no data (scratch) and is deleted within the exception period (max 30 days)
+    verification:
+      procedure: Re-evaluate after the owner replaces the volume
+      expected: COMPLIANT
+    implementation_status: implemented
+
+  - id: SEC-008
+    title: EC2 IMDSv2 enforcement
+    domain: compute-security
+    description: EC2 instances require IMDSv2 session tokens (HttpTokens=required).
+    rationale: IMDSv1 enables SSRF-based theft of instance role credentials.
+    resource_types: [AWS::EC2::Instance]
+    severity: medium
+    detection:
+      method: config_managed_rule
+      config_managed_rules: [EC2_IMDSV2_CHECK]
+      securityhub_controls: [EC2.8]
+      verification: pending
+    evaluation_logic: NON_COMPLIANT if MetadataOptions.HttpTokens is optional and the endpoint is enabled
+    remediation:
+      eligibility: human_approval
+      action: ec2:ModifyInstanceMetadataOptions HttpTokens=required on the allowlisted instance
+      runbook: runbooks/enforce-imdsv2.yaml (Phase 6)
+      scope: allowlisted project-owned instances only
+      never: [instances not on the allowlist, production workloads]
+      preconditions:
+        - Allowlist match
+        - Owner confirmed the workload's SDKs support IMDSv2 (stated in the approval comment)
+      rollback: ModifyInstanceMetadataOptions HttpTokens=optional (captured previous value)
+    approval:
+      required: true
+      approvers: IAM principals listed in the remediation policy
+      timeout: 4h
+    evidence_requirements: [MetadataOptions before/after, approval record, execution ID, re-evaluation]
+    frameworks:
+      nist_800_53_r5: [AC-3, CM-6, CM-7]
+      cis_aws_v5_0_0: ["5.7"]
+      cis_aws_v6_0_0: ["6.7"]
+      pci_dss_v4_0_1: ["2.2.1"]
+      soc2_tsc_2017: [CC6.1]
+    mapping_relationship: supporting
+    mapping_notes: >-
+      No EC2 instance will be deployed without separate approval (prompt section 15). Live
+      demonstration uses synthetic Config events. The SSM runbook is tested offline, and against a
+      real instance only if one is approved.
+    exception_policy:
+      allowed: true
+      requires: Vendor appliance without IMDSv2 support; hop limit 1 and no instance role with sensitive permissions; max 90 days
+    verification:
+      procedure: Re-evaluate; DescribeInstances MetadataOptions
+      expected: HttpTokens=required
+    implementation_status: implemented
+
+  - id: SEC-009
+    title: IAM users without MFA
+    domain: identity-access
+    description: Every IAM user with a console password has an MFA device.
+    rationale: A password-only console login is one phishing email away from account takeover.
+    resource_types: [AWS::IAM::User]
+    severity: high
+    detection:
+      method: config_managed_rule
+      config_managed_rules: [MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS, IAM_USER_MFA_ENABLED]
+      securityhub_controls: [IAM.5, IAM.19]
+      verification: pending
+    evaluation_logic: NON_COMPLIANT if the user has a login profile and zero MFA devices
+    remediation:
+      eligibility: report_only
+      action: Notify the security operator and the user's owner. Never deactivate users automatically.
+      rationale: Disabling a human identity can lock out administrators. IAM administrator permissions are on the prohibited list.
+    approval:
+      required: false
+    evidence_requirements: [Config evaluation result, user name hashed in public reports, notification message ID]
+    frameworks:
+      nist_800_53_r5: [IA-2, IA-2(1), IA-2(2)]
+      cis_aws_v5_0_0: ["1.9"]
+      cis_aws_v6_0_0: ["2.9"]
+      pci_dss_v4_0_1: ["8.4.1", "8.4.2"]
+      soc2_tsc_2017: [CC6.1]
+    mapping_relationship: direct
+    exception_policy:
+      allowed: false
+    verification:
+      procedure: Re-evaluate after the user enrols MFA
+      expected: COMPLIANT
+    implementation_status: implemented
+
+  - id: SEC-010
+    title: Excessively permissive IAM policies
+    domain: identity-access
+    description: >-
+      No customer-managed or inline policy grants Action "*" on Resource "*". Policies that grant
+      service-wide wildcards (for example "s3:*") are reviewed, and external or public access is
+      surfaced by IAM Access Analyzer.
+    rationale: Wildcard administrative policies break least privilege and let one compromised principal take over the account.
+    resource_types: [AWS::IAM::Policy, AWS::IAM::Role, AWS::IAM::User, AWS::IAM::Group]
+    severity: high
+    detection:
+      method: config_managed_rule
+      config_managed_rules: [IAM_POLICY_NO_STATEMENTS_WITH_ADMIN_ACCESS, IAM_POLICY_NO_STATEMENTS_WITH_FULL_ACCESS]
+      securityhub_controls: [IAM.1, IAM.21]
+      access_analyzer: external access analyzer findings; unused access analyzer is a paid feature and is not used
+      verification: pending
+    evaluation_logic: >-
+      NON_COMPLIANT if an attached, customer-managed policy version has an Allow statement with
+      Action "*" (or "*:*") and Resource "*". Service-level wildcards are flagged for review
+      (medium). AWS managed policies are reported only by attachment.
+    remediation:
+      eligibility: report_only
+      action: Open a review task for the policy owner. Never detach or edit IAM policies automatically.
+      rationale: IAM administrator permissions are on the prohibited automatic-change list.
+    approval:
+      required: false
+    evidence_requirements: [Config evaluation result, Policy ARN and version ID, Access Analyzer finding ID]
+    frameworks:
+      nist_800_53_r5: [AC-2, AC-3, AC-6]
+      cis_aws_v5_0_0: ["1.15"]
+      cis_aws_v6_0_0: ["2.15"]
+      pci_dss_v4_0_1: ["7.2.1", "7.2.2"]
+      soc2_tsc_2017: [CC6.3]
+    mapping_relationship: partial
+    exception_policy:
+      allowed: true
+      requires: Break-glass role with MFA, permissions boundary or SCP guardrail, CloudTrail alerting; reviewed every 90 days
+    verification:
+      procedure: Re-evaluate after the owner's change; confirm the policy version changed
+      expected: COMPLIANT
+    implementation_status: implemented
+
+  - id: SEC-011
+    title: Long-lived IAM access keys
+    domain: identity-access
+    description: Active IAM user access keys are rotated within 90 days. Keys unused for 45 days are disabled. A user has at most one active key.
+    rationale: Long-lived static keys leak through code, laptops and CI logs. Workloads should use roles and OIDC (as this project's CI does).
+    resource_types: [AWS::IAM::User]
+    severity: medium
+    detection:
+      method: config_managed_rule
+      config_managed_rules: [ACCESS_KEYS_ROTATED, IAM_USER_UNUSED_CREDENTIALS_CHECK]
+      config_rule_parameters: {maxAccessKeyAge: "90", maxCredentialUsageAge: "45"}
+      securityhub_controls: [IAM.3, IAM.22]
+      verification: pending
+    evaluation_logic: NON_COMPLIANT if an active key is older than 90 days, unused for 45 days or more, or the user has two active keys
+    remediation:
+      eligibility: report_only
+      action: Notify the key owner and the security operator. Never deactivate keys automatically.
+      rationale: Deactivating a key in use breaks workloads, and identity changes are on the prohibited list.
+    approval:
+      required: false
+    evidence_requirements: [Config evaluation result, key ID suffix only (last 4 chars), key age in days]
+    frameworks:
+      nist_800_53_r5: [AC-2, AC-2(3), IA-5]
+      cis_aws_v5_0_0: ["1.11", "1.12", "1.13"]
+      cis_aws_v6_0_0: ["2.11", "2.12", "2.13"]
+      pci_dss_v4_0_1: ["8.2.6", "8.3.9", "8.6.3"]
+      soc2_tsc_2017: [CC6.1, CC6.2]
+    mapping_relationship: partial
+    exception_policy:
+      allowed: true
+      requires: Third-party integration that cannot use roles, key scoped by policy and source-IP condition, max 90 days
+    verification:
+      procedure: Re-evaluate after rotation
+      expected: COMPLIANT
+    implementation_status: implemented
+
+  - id: SEC-012
+    title: CloudTrail logging status
+    domain: logging-monitoring
+    description: >-
+      At least one trail records management events in the target Region with logging on, log file
+      validation enabled and delivery succeeding. A StopLogging, DeleteTrail or UpdateTrail call
+      is treated as a security event.
+    rationale: CloudTrail is the audit record every other control and investigation depends on. Turning it off is a classic attacker step.
+    resource_types: [AWS::CloudTrail::Trail]
+    severity: critical
+    detection:
+      method: hybrid
+      config_managed_rules: [CLOUD_TRAIL_ENABLED, MULTI_REGION_CLOUD_TRAIL_ENABLED, CLOUD_TRAIL_LOG_FILE_VALIDATION_ENABLED, CLOUD_TRAIL_ENCRYPTION_ENABLED]
+      eventbridge_patterns: ["cloudtrail StopLogging | DeleteTrail | UpdateTrail | PutEventSelectors"]
+      securityhub_controls: [CloudTrail.1, CloudTrail.2, CloudTrail.4]
+      verification: pending
+    evaluation_logic: >-
+      NON_COMPLIANT if no trail with IsLogging=true covers the Region, or log file validation is
+      off. MULTI_REGION_CLOUD_TRAIL_ENABLED is reported as informational: the existing trail is
+      single-Region by design because an SCP denies the other US Region (to be confirmed in
+      discovery).
+    remediation:
+      eligibility: escalate
+      action: Page the security operator immediately. Never start, stop, create or modify trails automatically.
+      rationale: The trail is a pre-existing, account-level audit service owned by another project.
+    approval:
+      required: false
+    evidence_requirements: [GetTrailStatus snapshot, CloudTrail event that changed the trail (eventID, principal ARN redacted in public)]
+    frameworks:
+      nist_800_53_r5: [AU-2, AU-3, AU-6, AU-9, AU-12, SI-4]
+      cis_aws_v5_0_0: ["3.1", "3.2", "3.5"]
+      cis_aws_v6_0_0: ["4.1", "4.2", "4.5"]
+      pci_dss_v4_0_1: ["10.2.1", "10.3.2", "10.3.4", "10.7.2"]
+      soc2_tsc_2017: [CC7.2]
+    mapping_relationship: partial
+    exception_policy:
+      allowed: false
+    verification:
+      procedure: GetTrailStatus shows IsLogging=true and a LatestDeliveryTime newer than the event
+      expected: Logging active
+    implementation_status: implemented
+
+  - id: SEC-013
+    title: Required resource tags
+    domain: governance
+    description: Taggable resources carry Project, Environment, Owner, ManagedBy and DataClassification.
+    rationale: >-
+      Tags drive cost allocation, ownership routing of findings and data-classification rules.
+      Tags are an input to decisions, never proof of authorisation (ADR 0006).
+    resource_types: [AWS::S3::Bucket, AWS::EC2::SecurityGroup, AWS::EC2::Volume, AWS::EC2::Instance, AWS::DynamoDB::Table, AWS::Lambda::Function]
+    severity: low
+    detection:
+      method: config_managed_rule
+      config_managed_rules: [REQUIRED_TAGS]
+      config_rule_parameters: {tag1Key: Project, tag2Key: Environment, tag3Key: Owner, tag4Key: ManagedBy, tag5Key: DataClassification}
+      verification: pending
+    evaluation_logic: NON_COMPLIANT if any required tag key is missing. Values are validated by the custom evaluator against the allowed-values list in policies/.
+    remediation:
+      eligibility: auto_low_risk
+      action: Add only the missing tags whose values are stated in the resource's allowlist entry (tag:TagResources). Never overwrite existing values and never invent an Owner.
+      runbook: runbooks/enforce-required-tags.yaml
+      scope: allowlisted project-owned test resources
+      never: [resources not on the allowlist, overwriting existing tag values]
+      preconditions: [Allowlist match, live tag read confirms tags still missing]
+      rollback: Remove exactly the tag keys that were added (recorded in evidence)
+    approval:
+      required: false
+      condition: Mode 2 only with remediation_enabled=true and an allowlist match
+    evidence_requirements: [Tags before/after, list of keys added, Config re-evaluation]
+    frameworks:
+      nist_800_53_r5: [CM-8]
+      cis_aws_v5_0_0: []
+      cis_aws_v6_0_0: []
+      pci_dss_v4_0_1: ["12.5.1"]
+      soc2_tsc_2017: [CC6.1]
+    mapping_relationship: supporting
+    mapping_notes: Tagging supports inventory and ownership. The inventory process itself is organisational.
+    exception_policy:
+      allowed: true
+      requires: Resource type does not support tags, or is AWS-created (service-linked)
+    verification:
+      procedure: Re-evaluate; GetResources tag read
+      expected: COMPLIANT
+    implementation_status: implemented
+
+  - id: SEC-014
+    title: CloudWatch log retention
+    domain: logging-monitoring
+    description: Every log group has an explicit retention period. Project log groups keep at least the environment's minimum (dev 30 days, prod 365 days).
+    rationale: >-
+      "Never expire" log groups grow cost without limit. Retention that is too short destroys
+      evidence. Both are policy violations.
+    resource_types: [AWS::Logs::LogGroup]
+    severity: low
+    detection:
+      method: config_managed_rule
+      config_managed_rules: [CW_LOGGROUP_RETENTION_PERIOD_CHECK]
+      config_rule_parameters: {MinRetentionTime: "30"}
+      securityhub_controls: [CloudWatch.16]
+      verification: pending
+    evaluation_logic: NON_COMPLIANT if retentionInDays is unset (never expire) or below the environment minimum
+    remediation:
+      eligibility: auto_low_risk
+      action: Set retention to the environment's policy value only when the group is currently "never expire" (logs:PutRetentionPolicy)
+      runbook: runbooks/set-log-retention.yaml (Phase 6)
+      scope: allowlisted project-owned log groups
+      never: [reducing an existing retention period, log groups outside the allowlist, audit log groups]
+      preconditions:
+        - Allowlist match
+        - Group is currently "never expire"
+        - Oldest stored event is newer than the target retention (otherwise data would be deleted, so approval is required)
+      rollback: DeleteRetentionPolicy (back to never expire). Data already expired cannot be restored, which is why the third precondition exists.
+    approval:
+      required: false
+      condition: Becomes human_approval when the third precondition fails
+    evidence_requirements: [retentionInDays before/after, oldest event timestamp, Config re-evaluation]
+    frameworks:
+      nist_800_53_r5: [AU-11, SI-12]
+      cis_aws_v5_0_0: []
+      cis_aws_v6_0_0: []
+      pci_dss_v4_0_1: ["10.5.1"]
+      soc2_tsc_2017: [CC7.2]
+    mapping_relationship: partial
+    mapping_notes: PCI 10.5.1 asks for 12 months of audit logs (3 immediately available). The dev minimum of 30 days is deliberately below it and is documented as a dev-only deviation.
+    exception_policy:
+      allowed: true
+      requires: Debug log group with no audit value, owner approval; max 90 days
+    verification:
+      procedure: Re-evaluate; DescribeLogGroups retentionInDays
+      expected: COMPLIANT
+    implementation_status: implemented
+
+  - id: SEC-015
+    title: Unauthorized configuration changes
+    domain: change-management
+    description: >-
+      Changes to security-relevant configuration (security groups, bucket policies and public
+      access blocks, IAM policies, CloudTrail, Config, this platform's own resources) made outside
+      the approved pipeline are detected, attributed and escalated. Terraform drift on this
+      platform's stack is detected on a schedule.
+    rationale: >-
+      Console "quick fixes" and attacker persistence both appear as changes outside change
+      control. Detecting them closes the loop between policy-as-code and the real account.
+    resource_types: [AWS::EC2::SecurityGroup, AWS::S3::Bucket, AWS::IAM::Policy, AWS::IAM::Role, AWS::CloudTrail::Trail, AWS::Config::ConfigurationRecorder]
+    severity: high
+    detection:
+      method: cloudtrail_eventbridge
+      eventbridge_patterns:
+        - "ec2 AuthorizeSecurityGroupIngress | RevokeSecurityGroupIngress | ModifySecurityGroupRules"
+        - "s3 PutBucketPolicy | DeleteBucketPolicy | PutBucketPublicAccessBlock | DeleteBucketPublicAccessBlock"
+        - "config StopConfigurationRecorder | DeleteConfigurationRecorder | DeleteDeliveryChannel | DeleteConfigRule"
+        - "cloudtrail StopLogging | DeleteTrail | UpdateTrail"
+      custom_evaluator: >-
+        src/findings_processor change attribution: the principal is compared with the approved
+        change principals (Terraform apply role, remediation automation role). Anything else on a
+        protected resource is "unauthorized" until a human reviews it.
+      terraform_drift: scheduled drift-detection workflow (read-only plan, exit code 2 = drift)
+      limitation: >-
+        IAM is a global service whose CloudTrail events reach EventBridge in us-east-1. If an SCP
+        denies us-east-1 (as recorded for this account in Project 2), IAM changes are detected
+        only by the periodic Config evaluation, not in near-real time.
+      verification: pending
+    evaluation_logic: >-
+      A change event on a monitored resource whose userIdentity.arn (role session issuer) is not
+      in the approved-change-principal list, or whose time is outside an approved change window,
+      produces an unauthorized-change finding. Drift = a non-empty plan for the platform stack.
+    remediation:
+      eligibility: report_only
+      action: Investigate and notify. Restoration goes through the reviewed Terraform pipeline (plan, then approved apply), never through automatic revert.
+      rationale: An automatic revert of a human change can fight an incident responder.
+    approval:
+      required: false
+    evidence_requirements: [CloudTrail eventID, eventName, time, principal type (ARN redacted in public), resource, drift report with addresses only]
+    frameworks:
+      nist_800_53_r5: [AU-6, CA-7, CM-3, CM-3(5), IR-5, SI-4]
+      cis_aws_v5_0_0: ["3.3", "4.4", "4.5", "4.8", "4.9", "4.10"]
+      cis_aws_v6_0_0: ["4.3", "5.4", "5.5", "5.8", "5.9", "5.10"]
+      pci_dss_v4_0_1: ["6.5.1", "10.4.1", "11.5.2"]
+      soc2_tsc_2017: [CC7.1, CC7.2, CC8.1]
+    mapping_relationship: partial
+    mapping_notes: >-
+      CIS 4.x / 5.x monitoring recommendations prescribe CloudWatch metric filters and alarms on a
+      trail's log group. This design uses EventBridge rules on the same CloudTrail events. That
+      meets the detection intent but not the literal audit procedure, so it is "partial". CIS
+      3.3 / 4.3 (Config enabled in all Regions) cannot be met in a single-Region account.
+    exception_policy:
+      allowed: true
+      requires: Emergency change recorded in an incident ticket and reconciled through Terraform within 24h
+    verification:
+      procedure: Make a controlled console change to a test security group (scenario 15); confirm a finding is created and the drift workflow reports the address
+      expected: Finding created within 5 minutes; drift workflow exits with drift detected
+    implementation_status: implemented

@@ -1,0 +1,7 @@
+# Copy to backend.hcl (git-ignored) and run: terraform -chdir=terraform/stack init -backend-config=../envs/prod/backend.hcl
+bucket       = "acscg-tfstate-<ACCOUNT_ID>-us-east-2"
+key          = "stack/prod/terraform.tfstate"
+region       = "us-east-2"
+encrypt      = true
+kms_key_id   = "alias/acscg-tfstate"
+use_lockfile = true

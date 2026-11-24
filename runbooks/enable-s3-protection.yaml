@@ -1,0 +1,134 @@
+# SSM Automation document: acscg-EnableBucketPublicAccessBlock (SEC-001). Mode 2 (Mode 3 when required).
+# Never touches the account-level public access block, bucket policies or objects.
+schemaVersion: "0.3"
+description: Enable all four bucket-level Block Public Access settings on an allowlisted bucket.
+assumeRole: "{{ AutomationAssumeRole }}"
+parameters:
+  AutomationAssumeRole:
+    type: String
+    allowedPattern: "^arn:aws[a-z-]*:iam::\\d{12}:role/acscg-[a-z]+-rem-s3-exec$"
+  FindingKey:
+    type: String
+    allowedPattern: "^[0-9a-f]{64}$"
+  RequestId:
+    type: String
+    allowedPattern: "^[0-9a-f]{32}$|^req-[0-9]+$"
+  RequireApproval:
+    type: String
+    allowedValues: ["true", "false"]
+    default: "false"
+  Approvers:
+    type: StringList
+  BucketName:
+    type: String
+    allowedPattern: "^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$"
+mainSteps:
+  - name: AssertAndCapture
+    action: aws:executeScript
+    onFailure: Abort
+    inputs:
+      Runtime: python3.11
+      Handler: handler
+      InputPayload:
+        Bucket: "{{ BucketName }}"
+      Script: |-
+        import json
+        import boto3
+        from botocore.exceptions import ClientError
+
+        FIELDS = ("BlockPublicAcls", "IgnorePublicAcls", "BlockPublicPolicy", "RestrictPublicBuckets")
+
+        def handler(events, context):
+            try:
+                config = boto3.client("s3").get_public_access_block(Bucket=events["Bucket"])["PublicAccessBlockConfiguration"]
+            except ClientError as exc:
+                if exc.response["Error"]["Code"] != "NoSuchPublicAccessBlockConfiguration":
+                    raise
+                config = {}
+            before = {k: bool(config.get(k, False)) for k in FIELDS}
+            if all(before.values()):
+                raise ValueError("bucket already fully protected; nothing to do")
+            return {"Before": json.dumps(before), "HadConfig": bool(config)}
+    outputs:
+      - Name: Before
+        Selector: $.Payload.Before
+        Type: String
+      - Name: HadConfig
+        Selector: $.Payload.HadConfig
+        Type: Boolean
+  - name: ApprovalRequired
+    action: aws:branch
+    inputs:
+      Choices:
+        - NextStep: Approve
+          Variable: "{{ RequireApproval }}"
+          StringEquals: "true"
+      Default: Protect
+  - name: Approve
+    action: aws:approve
+    timeoutSeconds: 14400
+    onFailure: Abort
+    inputs:
+      Approvers: "{{ Approvers }}"
+      MinRequiredApprovals: 1
+      Message: "ACSCG finding {{ FindingKey }}: enable Block Public Access on bucket {{ BucketName }}."
+    nextStep: Protect
+  - name: Protect
+    action: aws:executeAwsApi
+    onFailure: Abort
+    inputs:
+      Service: s3
+      Api: PutPublicAccessBlock
+      Bucket: "{{ BucketName }}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+  - name: Reevaluate
+    action: aws:executeAwsApi
+    onFailure: Continue
+    inputs:
+      Service: config
+      Api: StartConfigRulesEvaluation
+      ConfigRuleNames:
+        - acscg-sec001-bucket-public-access
+  - name: Verify
+    action: aws:executeScript
+    onFailure: step:Rollback
+    inputs:
+      Runtime: python3.11
+      Handler: handler
+      InputPayload:
+        Bucket: "{{ BucketName }}"
+      Script: |-
+        import boto3
+
+        def handler(events, context):
+            config = boto3.client("s3").get_public_access_block(Bucket=events["Bucket"])["PublicAccessBlockConfiguration"]
+            if not all(config.values()):
+                raise ValueError("bucket public access block not fully enabled")
+            return {"Verified": True}
+    isEnd: true
+  - name: Rollback
+    action: aws:executeScript
+    onFailure: Abort
+    inputs:
+      Runtime: python3.11
+      Handler: handler
+      InputPayload:
+        Bucket: "{{ BucketName }}"
+        Before: "{{ AssertAndCapture.Before }}"
+        HadConfig: "{{ AssertAndCapture.HadConfig }}"
+      Script: |-
+        import json
+        import boto3
+
+        def handler(events, context):
+            s3 = boto3.client("s3")
+            if events["HadConfig"]:
+                s3.put_public_access_block(Bucket=events["Bucket"], PublicAccessBlockConfiguration=json.loads(events["Before"]))
+            else:
+                s3.delete_public_access_block(Bucket=events["Bucket"])
+            raise RuntimeError("verification failed; previous configuration restored")
+    isEnd: true

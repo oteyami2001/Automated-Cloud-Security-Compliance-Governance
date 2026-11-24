@@ -1,0 +1,71 @@
+%% ACSCG target architecture (Phase 1 design; nothing deployed). Dashed = optional, disabled by default.
+flowchart LR
+  subgraph GH["GitHub (public repository)"]
+    PR["Pull request<br/>CI: tests, Ruff, Bandit, TFLint,<br/>Checkov, Trivy, secret scan, zizmor"]
+    WF["Protected workflows<br/>plan → reviewed digest → apply<br/>drift, report, cleanup"]
+  end
+
+  subgraph AWS["AWS account (dev), us-east-2"]
+    direction LR
+    subgraph SRC["Detection sources"]
+      CFG["AWS Config<br/>selected resource types<br/>managed + custom rules"]
+      CT["CloudTrail<br/>(existing trail, reused)"]
+      IAA["IAM Access Analyzer<br/>(account analyzer, free tier)"]
+      SH["Security Hub CSPM<br/>(optional)"]:::opt
+      GD["GuardDuty<br/>(optional)"]:::opt
+    end
+
+    EB["EventBridge<br/>default bus<br/>narrow rules per source"]
+
+    subgraph PROC["Findings processing (serverless)"]
+      FP["Lambda findings-processor<br/>validate → normalise → classify →<br/>dedupe → lifecycle"]
+      DLQ["SQS dead-letter queue"]
+      DDB[("DynamoDB<br/>findings + idempotency<br/>+ remediation requests")]
+    end
+
+    subgraph REM["Remediation (report-only by default)"]
+      GK["Lambda remediation-gatekeeper<br/>policy + allowlist + live re-check"]
+      SSM["SSM Automation runbooks<br/>Mode 2: auto (low risk)<br/>Mode 3: aws:approve step"]
+    end
+
+    subgraph EVD["Evidence and reporting"]
+      S3E[("S3 evidence bucket<br/>SSE-KMS, versioning,<br/>Object Lock (governance)")]
+      RG["Lambda report-generator<br/>JSON + Markdown reports"]
+      CW["CloudWatch<br/>logs, ≤8 metrics, alarms,<br/>1 dashboard"]
+    end
+
+    SNS["SNS security-alerts<br/>(KMS encrypted, e-mail)"]
+    BUD["AWS Budgets<br/>$25 project budget (tag filter)"]
+    OIDC["IAM: GitHub OIDC roles<br/>plan / apply / report<br/>+ permissions boundary"]
+  end
+
+  OP(("Security operator /<br/>approver"))
+
+  PR --> WF
+  WF -- "OIDC, short-lived creds" --> OIDC
+  OIDC -- "terraform apply (reviewed plan)" --> AWS
+
+  CFG -- "Compliance Change" --> EB
+  CT -- "AWS API Call via CloudTrail" --> EB
+  IAA -- "Access Analyzer Finding" --> EB
+  SH -. "Findings - Imported" .-> EB
+  GD -. "GuardDuty Finding" .-> EB
+
+  EB --> FP
+  FP -- "on failure" --> DLQ
+  FP <--> DDB
+  FP --> S3E
+  FP --> SNS
+  FP -- "eligible + enabled" --> GK
+  GK --> SSM
+  SSM -- "approval request" --> SNS
+  SNS --> OP
+  OP -- "approve / reject (IAM-authenticated)" --> SSM
+  SSM -- "execution status" --> EB
+  SSM -- "re-evaluate" --> CFG
+  RG --> DDB
+  RG --> S3E
+  FP --> CW
+  WF -- "compliance-report workflow" --> RG
+
+  classDef opt stroke-dasharray: 5 5,opacity:0.8;

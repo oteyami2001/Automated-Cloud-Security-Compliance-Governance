@@ -1,0 +1,143 @@
+# SSM Automation document: acscg-EnforceRequiredTags (SEC-013). Mode 2.
+# Adds only missing keys whose values come from the allowlist entry. Never overwrites a value.
+schemaVersion: "0.3"
+description: Add missing required tags (values from the allowlist) to an allowlisted resource.
+assumeRole: "{{ AutomationAssumeRole }}"
+parameters:
+  AutomationAssumeRole:
+    type: String
+    allowedPattern: "^arn:aws[a-z-]*:iam::\\d{12}:role/acscg-[a-z]+-rem-tags-exec$"
+  FindingKey:
+    type: String
+    allowedPattern: "^[0-9a-f]{64}$"
+  RequestId:
+    type: String
+    allowedPattern: "^[0-9a-f]{32}$|^req-[0-9]+$"
+  RequireApproval:
+    type: String
+    allowedValues: ["true", "false"]
+    default: "false"
+  Approvers:
+    type: StringList
+  ResourceArn:
+    type: String
+    allowedPattern: "^arn:aws[a-z-]*:[a-z0-9-]+:[a-z0-9-]*:\\d{0,12}:[^*?]+$"
+  TagKeys:
+    type: StringList
+    allowedPattern: "^(Project|Environment|Owner|ManagedBy|DataClassification)$"
+  TagValues:
+    type: StringList
+    allowedPattern: "^[A-Za-z0-9 _.:/=+@-]{1,128}$"
+mainSteps:
+  - name: AssertAndCapture
+    action: aws:executeScript
+    onFailure: Abort
+    inputs:
+      Runtime: python3.11
+      Handler: handler
+      InputPayload:
+        Arn: "{{ ResourceArn }}"
+        Keys: "{{ TagKeys }}"
+        Values: "{{ TagValues }}"
+      Script: |-
+        import json
+        import boto3
+
+        def handler(events, context):
+            if len(events["Keys"]) != len(events["Values"]):
+                raise ValueError("TagKeys and TagValues differ in length")
+            mappings = boto3.client("resourcegroupstaggingapi").get_resources(ResourceARNList=[events["Arn"]])["ResourceTagMappingList"]
+            current = {t["Key"]: t["Value"] for t in (mappings[0]["Tags"] if mappings else [])}
+            to_add = {k: v for k, v in zip(events["Keys"], events["Values"]) if not current.get(k)}
+            if not to_add:
+                raise ValueError("no missing tags to add")
+            return {"ToAdd": json.dumps(to_add), "AddedKeys": sorted(to_add)}
+    outputs:
+      - Name: ToAdd
+        Selector: $.Payload.ToAdd
+        Type: String
+      - Name: AddedKeys
+        Selector: $.Payload.AddedKeys
+        Type: StringList
+  - name: ApprovalRequired
+    action: aws:branch
+    inputs:
+      Choices:
+        - NextStep: Approve
+          Variable: "{{ RequireApproval }}"
+          StringEquals: "true"
+      Default: AddTags
+  - name: Approve
+    action: aws:approve
+    timeoutSeconds: 14400
+    onFailure: Abort
+    inputs:
+      Approvers: "{{ Approvers }}"
+      MinRequiredApprovals: 1
+      Message: "ACSCG finding {{ FindingKey }}: add tags {{ TagKeys }} to {{ ResourceArn }}."
+    nextStep: AddTags
+  - name: AddTags
+    action: aws:executeScript
+    onFailure: Abort
+    inputs:
+      Runtime: python3.11
+      Handler: handler
+      InputPayload:
+        Arn: "{{ ResourceArn }}"
+        ToAdd: "{{ AssertAndCapture.ToAdd }}"
+      Script: |-
+        import json
+        import boto3
+
+        def handler(events, context):
+            result = boto3.client("resourcegroupstaggingapi").tag_resources(
+                ResourceARNList=[events["Arn"]], Tags=json.loads(events["ToAdd"])
+            )
+            if result.get("FailedResourcesMap"):
+                raise RuntimeError("tagging failed")
+            return {"Tagged": True}
+  - name: Reevaluate
+    action: aws:executeAwsApi
+    onFailure: Continue
+    inputs:
+      Service: config
+      Api: StartConfigRulesEvaluation
+      ConfigRuleNames:
+        - acscg-sec013-required-tags
+  - name: Verify
+    action: aws:executeScript
+    onFailure: step:Rollback
+    inputs:
+      Runtime: python3.11
+      Handler: handler
+      InputPayload:
+        Arn: "{{ ResourceArn }}"
+        ToAdd: "{{ AssertAndCapture.ToAdd }}"
+      Script: |-
+        import json
+        import boto3
+
+        def handler(events, context):
+            mappings = boto3.client("resourcegroupstaggingapi").get_resources(ResourceARNList=[events["Arn"]])["ResourceTagMappingList"]
+            current = {t["Key"]: t["Value"] for t in mappings[0]["Tags"]}
+            for key, value in json.loads(events["ToAdd"]).items():
+                if current.get(key) != value:
+                    raise ValueError(f"tag {key} not applied")
+            return {"Verified": True}
+    isEnd: true
+  - name: Rollback
+    action: aws:executeScript
+    onFailure: Abort
+    inputs:
+      Runtime: python3.11
+      Handler: handler
+      InputPayload:
+        Arn: "{{ ResourceArn }}"
+        AddedKeys: "{{ AssertAndCapture.AddedKeys }}"
+      Script: |-
+        import boto3
+
+        def handler(events, context):
+            boto3.client("resourcegroupstaggingapi").untag_resources(ResourceARNList=[events["Arn"]], TagKeys=events["AddedKeys"])
+            raise RuntimeError("verification failed; added tag keys removed")
+    isEnd: true

@@ -1,0 +1,24 @@
+[project]
+name = "acscg"
+version = "0.1.0"
+description = "Automated Cloud Security, Compliance & Governance: findings processing, remediation and compliance evidence for AWS"
+requires-python = ">=3.13,<3.14"
+readme = "README.md"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "BLE", "UP", "S", "N", "SIM", "PL", "RUF"]
+ignore = ["PLR2004"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "PLR2004", "PLR0913", "PLR0917", "PLC0415"]  # test helpers mirror AWS event shapes; local imports keep fixtures explicit
+
+[tool.bandit]
+exclude_dirs = ["tests"]
