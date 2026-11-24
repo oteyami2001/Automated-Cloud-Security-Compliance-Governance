@@ -127,8 +127,10 @@ resource "aws_iam_role" "function" {
 data "aws_iam_policy_document" "logs" {
   for_each = local.functions
   statement {
-    actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
-    resources = ["${aws_cloudwatch_log_group.function[each.key].arn}:*"]
+    actions = ["logs:CreateLogStream", "logs:PutLogEvents"]
+    # Built from the fixed name, not the resource: a reference would defer this data source (and
+    # show every function's log policy as changed) whenever any log group is added.
+    resources = ["arn:${local.p}:logs:${var.region}:${var.account_id}:log-group:/aws/lambda/${var.name_prefix}-${each.key}:*"]
   }
 }
 

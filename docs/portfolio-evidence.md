@@ -107,7 +107,7 @@ All results below were produced in the build environment without AWS credentials
 |---|---|---|---|
 | P5-1 | Reconciliation (fixes P4-13) | `findings_processor/reconcile.py`: reads every current result of the `acscg-` rules (`DescribeConfigRules`, `GetComplianceDetailsByConfigRule`, all pages) and feeds each through the normal processor. Deterministic event IDs make re-runs duplicates. New Lambda `findings-reconciler` every 6 h; read-only Config permissions scoped to `config-rule/*`. `tests/unit/test_reconcile.py` | ✅ offline |
 | P5-2 | Periodic never-expire check (fixes P4-14) | `sec014-retention-set` is now a `ScheduledNotification` rule (24 h). The evaluator lists log groups itself (`logs:DescribeLogGroups`) and puts evaluations in batches of 100. Tests cover pagination, batching and never-expire | ✅ offline |
-| P5-3 | Rule ordering | `module.security_config` depends on `module.eventbridge`, so a fresh deployment routes events before the rules publish their first results | ✅ offline |
+| P5-3 | Rule ordering | Tried `depends_on = [module.eventbridge]` on the Config module. Plan run 45437992486 (16:31Z) showed it defers every data source in the module: recorder role, delivery policy and an `AWS_ConfigRole` attachment **replacement** appeared. Not approved; removed. Missed first results are recovered by the reconciler (P5-1). Log policies are now built from fixed names so adding a function no longer shows the others as changed | ✅ |
 
 ## Validation scenarios (Phase 9 target)
 
