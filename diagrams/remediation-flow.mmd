@@ -1,0 +1,23 @@
+%% Finding and remediation lifecycle (states stored in DynamoDB; every transition writes evidence).
+stateDiagram-v2
+  [*] --> OPEN: NON_COMPLIANT / finding received
+  OPEN --> SUPPRESSED_EXCEPTION: approved, unexpired exception
+  SUPPRESSED_EXCEPTION --> OPEN: exception expires
+  OPEN --> REPORTED: Mode 1 (report-only) or eligibility = report_only
+  OPEN --> REJECTED_POLICY: gatekeeper denies (flag off, not allowlisted,<br/>account/region/action mismatch, prohibited target)
+  OPEN --> PENDING_APPROVAL: Mode 3 request created
+  OPEN --> REMEDIATING: Mode 2 authorised (auto, low risk)
+  PENDING_APPROVAL --> REMEDIATION_REJECTED: approver rejects
+  PENDING_APPROVAL --> APPROVAL_EXPIRED: timeout (4 h)
+  PENDING_APPROVAL --> REMEDIATING: approved
+  REMEDIATING --> VERIFYING: action succeeded
+  REMEDIATING --> REMEDIATION_FAILED: action failed (retry ≤ 2, then stop)
+  VERIFYING --> VERIFIED_RESOLVED: re-evaluation COMPLIANT
+  VERIFYING --> VERIFICATION_FAILED: still NON_COMPLIANT → rollback if supported, escalate
+  REPORTED --> RESOLVED_EXTERNALLY: owner fixed, Config COMPLIANT
+  REMEDIATION_REJECTED --> RESOLVED_EXTERNALLY
+  APPROVAL_EXPIRED --> RESOLVED_EXTERNALLY
+  REJECTED_POLICY --> RESOLVED_EXTERNALLY
+  VERIFIED_RESOLVED --> [*]
+  RESOLVED_EXTERNALLY --> [*]
+  VERIFIED_RESOLVED --> OPEN: regression (new NON_COMPLIANT)

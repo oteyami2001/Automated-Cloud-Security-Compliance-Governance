@@ -1,0 +1,22 @@
+# DRAFT (Phase 1). The schema and loader arrive in Phase 2; Terraform renders the real file in Phase 6.
+# Default posture: report-only, remediation disabled, empty allowlist.
+environment: dev
+remediation_enabled: false          # must be true AND mode must allow it AND an allowlist entry must match
+remediation_mode: report_only       # report_only | auto_low_risk | human_approval
+approval:
+  approvers: []                     # IAM principal ARNs (supplied via TF_VAR, never committed)
+  timeout_minutes: 240
+  min_required_approvals: 1
+limits:
+  max_attempts_per_finding: 2
+  lock_ttl_minutes: 300
+allowlist: []                       # entries are added only for project-owned test fixtures, e.g.:
+# - id: AL-001
+#   control_id: SEC-005
+#   action: ec2:RevokeSecurityGroupIngress
+#   account: "${aws_account_id}"     # rendered by Terraform from TF_VAR_aws_account_id
+#   region: us-east-2
+#   resource_arn: "arn:aws:ec2:us-east-2:${aws_account_id}:security-group/${fixture_sg_id}"
+#   expires_at: "2026-12-01T00:00:00Z"   # at most 7 days after the window opens
+#   reason: "Scenario 9-11 demonstration window"
+protected_resources: []             # pre-existing resources from discovery (D13); never remediated

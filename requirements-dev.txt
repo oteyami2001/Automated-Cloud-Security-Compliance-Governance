@@ -1,0 +1,6 @@
+# Offline development and test dependencies (Phase 1). Versions are pinned; hashes are added in
+# Phase 8 when CI installs with --require-hashes.
+pytest==9.1.1
+PyYAML==6.0.3
+jsonschema==4.26.0
+ruff==0.16.9

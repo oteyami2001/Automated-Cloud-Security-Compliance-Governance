@@ -1,0 +1,206 @@
+# Generated in Phase 1 from the sources named under `sources`. Edit by hand only to record
+# verification results; keep IDs in sync with controls/control-catalog.yaml.
+framework:
+  key: nist_800_53_r5
+  name: NIST SP 800-53 Rev. 5, Security and Privacy Controls for Information Systems and Organizations
+  version: Rev. 5, Release 5.2.0
+  sources:
+  - name: 'NIST OSCAL content: NIST_SP-800-53_rev5_catalog.json'
+    url: https://github.com/usnistgov/oscal-content/blob/main/nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json
+    catalog_last_modified: '2026-10-22T11:30:00.00000-00:00'
+    accessed: '2026-11-24'
+    authority: primary (published by NIST)
+  notes: IDs and titles were read from the official machine-readable catalog. The mapping of ACSCG controls
+    to these IDs is the author's engineering judgement.
+requirements:
+- id: AC-2
+  title: Account Management
+  mapped_by:
+  - SEC-010
+  - SEC-011
+  verification: verified-primary-source
+- id: AC-2(3)
+  title: Account Management | Disable Accounts
+  mapped_by:
+  - SEC-011
+  verification: verified-primary-source
+- id: AC-3
+  title: Access Enforcement
+  mapped_by:
+  - SEC-001
+  - SEC-008
+  - SEC-010
+  verification: verified-primary-source
+- id: AC-4
+  title: Information Flow Enforcement
+  mapped_by:
+  - SEC-001
+  verification: verified-primary-source
+- id: AC-6
+  title: Least Privilege
+  mapped_by:
+  - SEC-001
+  - SEC-010
+  verification: verified-primary-source
+- id: AC-17
+  title: Remote Access
+  mapped_by:
+  - SEC-005
+  - SEC-006
+  verification: verified-primary-source
+- id: AC-17(2)
+  title: Remote Access | Protection of Confidentiality and Integrity Using Encryption
+  mapped_by:
+  - SEC-004
+  verification: verified-primary-source
+- id: AU-2
+  title: Event Logging
+  mapped_by:
+  - SEC-012
+  verification: verified-primary-source
+- id: AU-3
+  title: Content of Audit Records
+  mapped_by:
+  - SEC-012
+  verification: verified-primary-source
+- id: AU-6
+  title: Audit Record Review, Analysis, and Reporting
+  mapped_by:
+  - SEC-012
+  - SEC-015
+  verification: verified-primary-source
+- id: AU-9
+  title: Protection of Audit Information
+  mapped_by:
+  - SEC-012
+  verification: verified-primary-source
+- id: AU-11
+  title: Audit Record Retention
+  mapped_by:
+  - SEC-014
+  verification: verified-primary-source
+- id: AU-12
+  title: Audit Record Generation
+  mapped_by:
+  - SEC-012
+  verification: verified-primary-source
+- id: CA-7
+  title: Continuous Monitoring
+  mapped_by:
+  - SEC-015
+  verification: verified-primary-source
+- id: CM-3
+  title: Configuration Change Control
+  mapped_by:
+  - SEC-015
+  verification: verified-primary-source
+- id: CM-3(5)
+  title: Configuration Change Control | Automated Security Response
+  mapped_by:
+  - SEC-015
+  verification: verified-primary-source
+- id: CM-6
+  title: Configuration Settings
+  mapped_by:
+  - SEC-008
+  verification: verified-primary-source
+- id: CM-7
+  title: Least Functionality
+  mapped_by:
+  - SEC-005
+  - SEC-006
+  - SEC-008
+  verification: verified-primary-source
+- id: CM-8
+  title: System Component Inventory
+  mapped_by:
+  - SEC-013
+  verification: verified-primary-source
+- id: CP-9
+  title: System Backup
+  mapped_by:
+  - SEC-003
+  verification: verified-primary-source
+- id: CP-10
+  title: System Recovery and Reconstitution
+  mapped_by:
+  - SEC-003
+  verification: verified-primary-source
+- id: IA-2
+  title: Identification and Authentication (Organizational Users)
+  mapped_by:
+  - SEC-009
+  verification: verified-primary-source
+- id: IA-2(1)
+  title: Identification and Authentication (Organizational Users) | Multi-factor Authentication to Privileged
+    Accounts
+  mapped_by:
+  - SEC-009
+  verification: verified-primary-source
+- id: IA-2(2)
+  title: Identification and Authentication (Organizational Users) | Multi-factor Authentication to Non-privileged
+    Accounts
+  mapped_by:
+  - SEC-009
+  verification: verified-primary-source
+- id: IA-5
+  title: Authenticator Management
+  mapped_by:
+  - SEC-011
+  verification: verified-primary-source
+- id: IR-5
+  title: Incident Monitoring
+  mapped_by:
+  - SEC-015
+  verification: verified-primary-source
+- id: SC-7
+  title: Boundary Protection
+  mapped_by:
+  - SEC-001
+  - SEC-005
+  - SEC-006
+  verification: verified-primary-source
+- id: SC-7(5)
+  title: Boundary Protection | Deny by Default — Allow by Exception
+  mapped_by:
+  - SEC-005
+  - SEC-006
+  verification: verified-primary-source
+- id: SC-8
+  title: Transmission Confidentiality and Integrity
+  mapped_by:
+  - SEC-004
+  verification: verified-primary-source
+- id: SC-8(1)
+  title: Transmission Confidentiality and Integrity | Cryptographic Protection
+  mapped_by:
+  - SEC-004
+  verification: verified-primary-source
+- id: SC-13
+  title: Cryptographic Protection
+  mapped_by:
+  - SEC-002
+  verification: verified-primary-source
+- id: SC-28
+  title: Protection of Information at Rest
+  mapped_by:
+  - SEC-002
+  - SEC-007
+  verification: verified-primary-source
+- id: SC-28(1)
+  title: Protection of Information at Rest | Cryptographic Protection
+  mapped_by:
+  - SEC-002
+  - SEC-007
+  verification: verified-primary-source
+- id: SI-4
+  title: System Monitoring
+  mapped_by:
+  - SEC-012
+  - SEC-015
+  verification: verified-primary-source
+- id: SI-12
+  title: Information Management and Retention
+  mapped_by:
+  - SEC-014
+  verification: verified-primary-source

@@ -1,0 +1,160 @@
+# Generated in Phase 1 from the sources named under `sources`. Edit by hand only to record
+# verification results; keep IDs in sync with controls/control-catalog.yaml.
+framework:
+  key: cis_aws_v5_0_0
+  name: CIS Amazon Web Services Foundations Benchmark
+  version: v5.0.0
+  sources:
+  - name: Prowler compliance definition prowler/compliance/aws/cis_5.0_aws.json (Apache-2.0)
+    url: https://github.com/prowler-cloud/prowler/blob/master/prowler/compliance/aws/cis_5.0_aws.json
+    accessed: '2026-11-24'
+    authority: secondary (third-party transcription of CIS recommendation titles)
+  - name: CIS Amazon Web Services Foundations Benchmark (PDF, CIS WorkBench)
+    url: https://www.cisecurity.org/benchmark/amazon_web_services
+    accessed: null
+    authority: 'primary: NOT reachable from the Phase 1 environment; verify before claiming alignment'
+  notes: Recommendation numbers changed between v5.0.0 and v6.0.0 (IAM moved from section 1 to 2, etc.).
+    Both are kept so reports can name either.
+requirements:
+- id: '1.9'
+  title: Ensure multi-factor authentication (MFA) is enabled for all IAM users that have a console password
+  profile: Level 1
+  assessment: Automated
+  mapped_by:
+  - SEC-009
+  verification: secondary-source
+- id: '1.11'
+  title: Ensure credentials unused for 45 days or more are disabled
+  profile: Level 1
+  assessment: Automated
+  mapped_by:
+  - SEC-011
+  verification: secondary-source
+- id: '1.12'
+  title: Ensure there is only one active access key for any single IAM user
+  profile: Level 1
+  assessment: Automated
+  mapped_by:
+  - SEC-011
+  verification: secondary-source
+- id: '1.13'
+  title: Ensure access keys are rotated every 90 days or less
+  profile: Level 1
+  assessment: Automated
+  mapped_by:
+  - SEC-011
+  verification: secondary-source
+- id: '1.15'
+  title: Ensure IAM policies that allow full *:* administrative privileges are not attached
+  profile: Level 1
+  assessment: Automated
+  mapped_by:
+  - SEC-010
+  verification: secondary-source
+- id: 2.1.1
+  title: Ensure S3 Bucket Policy is set to deny HTTP requests
+  profile: Level 2
+  assessment: Automated
+  mapped_by:
+  - SEC-004
+  verification: secondary-source
+- id: 2.1.4
+  title: Ensure that S3 is configured with 'Block Public Access' enabled
+  profile: Level 1
+  assessment: Automated
+  mapped_by:
+  - SEC-001
+  verification: secondary-source
+- id: '3.1'
+  title: Ensure CloudTrail is enabled in all regions
+  profile: Level 1
+  assessment: Manual
+  mapped_by:
+  - SEC-012
+  verification: secondary-source
+- id: '3.2'
+  title: Ensure CloudTrail log file validation is enabled
+  profile: Level 2
+  assessment: Automated
+  mapped_by:
+  - SEC-012
+  verification: secondary-source
+- id: '3.3'
+  title: Ensure AWS Config is enabled in all regions
+  profile: Level 2
+  assessment: Automated
+  mapped_by:
+  - SEC-015
+  verification: secondary-source
+- id: '3.5'
+  title: Ensure CloudTrail logs are encrypted at rest using KMS CMKs
+  profile: Level 2
+  assessment: Automated
+  mapped_by:
+  - SEC-012
+  verification: secondary-source
+- id: '4.4'
+  title: Ensure IAM policy changes are monitored
+  profile: Level 1
+  assessment: Manual
+  mapped_by:
+  - SEC-015
+  verification: secondary-source
+- id: '4.5'
+  title: Ensure CloudTrail configuration changes are monitored
+  profile: Level 1
+  assessment: Manual
+  mapped_by:
+  - SEC-015
+  verification: secondary-source
+- id: '4.8'
+  title: Ensure S3 bucket policy changes are monitored
+  profile: Level 1
+  assessment: Manual
+  mapped_by:
+  - SEC-015
+  verification: secondary-source
+- id: '4.9'
+  title: Ensure AWS Config configuration changes are monitored
+  profile: Level 2
+  assessment: Manual
+  mapped_by:
+  - SEC-015
+  verification: secondary-source
+- id: '4.10'
+  title: Ensure security group changes are monitored
+  profile: Level 2
+  assessment: Manual
+  mapped_by:
+  - SEC-015
+  verification: secondary-source
+- id: 5.1.1
+  title: Ensure EBS volume encryption is enabled in all regions
+  profile: Level 1
+  assessment: Automated
+  mapped_by:
+  - SEC-007
+  verification: secondary-source
+- id: '5.3'
+  title: Ensure no security groups allow ingress from 0.0.0.0/0 to remote server administration ports
+  profile: Level 1
+  assessment: Automated
+  mapped_by:
+  - SEC-005
+  - SEC-006
+  verification: secondary-source
+- id: '5.4'
+  title: Ensure no security groups allow ingress from ::/0 to remote server administration ports
+  profile: Level 1
+  assessment: Automated
+  mapped_by:
+  - SEC-005
+  - SEC-006
+  verification: secondary-source
+- id: '5.7'
+  title: Ensure that the EC2 Metadata Service only allows IMDSv2
+  profile: Level 1
+  assessment: Automated
+  mapped_by:
+  - SEC-008
+  verification: secondary-source

@@ -1,0 +1,48 @@
+%% Trust boundaries (TB1–TB7). See docs/threat-model.md.
+flowchart TB
+  subgraph TB1["TB1 · GitHub (public, untrusted until OIDC claims verified)"]
+    PRF["Fork / PR code<br/>(no AWS credentials)"]
+    ENV["Protected environments<br/>dev-plan · dev · dev-cleanup"]
+  end
+
+  subgraph TB2["TB2 · AWS-owned event sources (trusted producers)"]
+    SRCS["Config · CloudTrail · Access Analyzer<br/>Security Hub CSPM* · GuardDuty*"]
+  end
+
+  subgraph ACCT["AWS account boundary (dev)"]
+    subgraph TB3a["TB3a · Detection plane (read-only to resources)"]
+      FP["findings-processor role<br/>read + write own table/bucket prefix"]
+      RG["report-generator role"]
+    end
+    subgraph TB3b["TB3b · Remediation plane (scoped write)"]
+      GK["gatekeeper role<br/>ssm:StartAutomationExecution on 4 docs"]
+      EX["automation execution roles<br/>one per runbook, resource-ARN scoped"]
+    end
+    subgraph TB6["TB6 · Evidence store"]
+      S3E[("evidence bucket<br/>KMS key policy + bucket policy")]
+    end
+    subgraph TB5["TB5 · Pre-existing / other-project resources (never modified)"]
+      OLD["existing CloudTrail trail · OIDC provider<br/>aiops-* / idp-* roles and buckets<br/>existing Config/Security Hub/GuardDuty (if any)"]
+    end
+    BOUND["Permissions boundary + explicit denies<br/>on every role this project creates"]
+  end
+
+  subgraph TB4["TB4 · Humans"]
+    OPS["Approver (IAM principal, MFA)<br/>≠ CI roles ≠ automation roles"]
+  end
+
+  subgraph TB7["TB7 · Public outputs"]
+    PUB["GitHub Actions logs · README · reports<br/>(redacted: no account ID, IPs, e-mails, ARNs)"]
+  end
+
+  PRF -. "no credentials" .-x ACCT
+  ENV == "OIDC: sub = immutable repo ID + environment" ==> ACCT
+  SRCS == "aws.* sources only (cannot be forged via PutEvents)" ==> FP
+  FP -- "async invoke" --> GK
+  GK -- "iam:PassRole (named roles only)" --> EX
+  OPS -- "ssm:SendAutomationSignal" --> EX
+  FP --> S3E
+  EX -. "deny" .-x OLD
+  FP -. "deny write" .-x OLD
+  RG -- "redacted reports" --> PUB
+  BOUND --- FP & GK & EX & RG

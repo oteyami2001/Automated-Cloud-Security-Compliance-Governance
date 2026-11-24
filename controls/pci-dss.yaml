@@ -1,0 +1,181 @@
+# Generated in Phase 1 from the sources named under `sources`. Edit by hand only to record
+# verification results; keep IDs in sync with controls/control-catalog.yaml.
+framework:
+  key: pci_dss_v4_0_1
+  name: Payment Card Industry Data Security Standard
+  version: v4.0.1 (June 2024)
+  sources:
+  - name: Prowler compliance definition prowler/compliance/aws/pci_4.0_aws.json (Apache-2.0)
+    url: https://github.com/prowler-cloud/prowler/blob/master/prowler/compliance/aws/pci_4.0_aws.json
+    accessed: '2026-11-24'
+    authority: 'secondary: confirms requirement IDs and parent statements only'
+  - name: PCI DSS v4.0.1 (PCI Security Standards Council document library)
+    url: https://www.pcisecuritystandards.org/document_library/
+    accessed: null
+    authority: 'primary: NOT reachable from the Phase 1 environment; the `title` text is the author''s
+      summary and must be checked against the standard'
+  notes: 'v4.0.1 is a limited revision of v4.0 that did not renumber requirements, so the v4.0 IDs in
+    the secondary source apply. Scope: these requirements apply only where cardholder data is stored,
+    processed or transmitted. This project processes none.'
+requirements:
+- id: 1.2.5
+  title: All services, protocols, and ports allowed are identified, approved, and have a defined business
+    need.
+  parent_statement: Network security controls (NSCs) are configured and maintained.
+  mapped_by:
+  - SEC-005
+  - SEC-006
+  verification: secondary-source-id
+- id: 1.3.1
+  title: Inbound traffic to the CDE is restricted to only traffic that is necessary; all other traffic
+    is specifically denied.
+  parent_statement: Network access to and from the cardholder data environment is restricted.
+  mapped_by:
+  - SEC-001
+  - SEC-005
+  - SEC-006
+  verification: secondary-source-id
+- id: 1.4.2
+  title: Inbound traffic from untrusted networks to trusted networks is restricted.
+  parent_statement: Network connections between trusted and untrusted networks are controlled.
+  mapped_by:
+  - SEC-001
+  - SEC-005
+  - SEC-006
+  verification: secondary-source-id
+- id: 2.2.1
+  title: Configuration standards are developed, implemented, and maintained for all system components.
+  parent_statement: null
+  mapped_by:
+  - SEC-008
+  verification: pending-primary-source
+- id: 3.5.1
+  title: PAN is rendered unreadable anywhere it is stored.
+  parent_statement: Primary account number (PAN) is secured wherever it is stored.
+  mapped_by:
+  - SEC-002
+  - SEC-007
+  verification: secondary-source-id
+- id: 4.2.1
+  title: Strong cryptography and security protocols are implemented to safeguard PAN during transmission
+    over open, public networks.
+  parent_statement: PAN is protected with strong cryptography during transmission.
+  mapped_by:
+  - SEC-004
+  verification: secondary-source-id
+- id: 6.5.1
+  title: Changes to all system components in the production environment are made according to established
+    procedures.
+  parent_statement: null
+  mapped_by:
+  - SEC-015
+  verification: pending-primary-source
+- id: 7.2.1
+  title: An access control model is defined and includes granting access based on business and access
+    needs.
+  parent_statement: Access to system components and data is appropriately defined and assigned.
+  mapped_by:
+  - SEC-001
+  - SEC-010
+  verification: secondary-source-id
+- id: 7.2.2
+  title: Access is assigned to users, including privileged users, based on job classification and function
+    and least privileges.
+  parent_statement: Access to system components and data is appropriately defined and assigned.
+  mapped_by:
+  - SEC-010
+  verification: secondary-source-id
+- id: 8.2.6
+  title: Inactive user accounts are removed or disabled within 90 days of inactivity.
+  parent_statement: User identification and related accounts for users and administrators are strictly
+    managed throughout an accounts lifecycle.
+  mapped_by:
+  - SEC-011
+  verification: secondary-source-id
+- id: 8.3.9
+  title: If passwords/passphrases are the only authentication factor, they are changed at least once every
+    90 days or access is dynamically analysed.
+  parent_statement: Strong authentication for users and administrators is established and managed.
+  mapped_by:
+  - SEC-011
+  verification: secondary-source-id
+- id: 8.4.1
+  title: MFA is implemented for all non-console access into the CDE for personnel with administrative
+    access.
+  parent_statement: Multi-factor authentication (MFA) is implemented to secure access into the CDE.
+  mapped_by:
+  - SEC-009
+  verification: secondary-source-id
+- id: 8.4.2
+  title: MFA is implemented for all non-console access into the CDE.
+  parent_statement: Multi-factor authentication (MFA) is implemented to secure access into the CDE.
+  mapped_by:
+  - SEC-009
+  verification: secondary-source-id
+- id: 8.6.3
+  title: Passwords/passphrases for application and system accounts are protected against misuse and changed
+    periodically.
+  parent_statement: Use of application and system accounts and associated authentication factors is strictly
+    managed.
+  mapped_by:
+  - SEC-011
+  verification: secondary-source-id
+- id: 10.2.1
+  title: Audit logs are enabled and active for all system components and cardholder data.
+  parent_statement: Audit logs are implemented to support the detection of anomalies and suspicious activity,
+    and the forensic analysis of events.
+  mapped_by:
+  - SEC-012
+  verification: secondary-source-id
+- id: 10.3.2
+  title: Audit log files are protected to prevent modifications by individuals.
+  parent_statement: Audit logs are protected from destruction and unauthorized modifications.
+  mapped_by:
+  - SEC-012
+  verification: secondary-source-id
+- id: 10.3.3
+  title: Audit log files are promptly backed up to a secure, central, internal log server(s) or other
+    media that is difficult to modify.
+  parent_statement: Audit logs are protected from destruction and unauthorized modifications.
+  mapped_by:
+  - SEC-003
+  verification: secondary-source-id
+- id: 10.3.4
+  title: File integrity monitoring or change-detection mechanisms is used on audit logs.
+  parent_statement: Audit logs are protected from destruction and unauthorized modifications.
+  mapped_by:
+  - SEC-012
+  verification: secondary-source-id
+- id: 10.4.1
+  title: Security events and specified logs are reviewed at least once daily.
+  parent_statement: Audit logs are reviewed to identify anomalies or suspicious activity.
+  mapped_by:
+  - SEC-015
+  verification: secondary-source-id
+- id: 10.5.1
+  title: Audit log history is retained for at least 12 months, with at least the most recent three months
+    immediately available for analysis.
+  parent_statement: Audit log history is retained and available for analysis.
+  mapped_by:
+  - SEC-014
+  verification: secondary-source-id
+- id: 10.7.2
+  title: Failures of critical security control systems are detected, alerted, and addressed promptly.
+  parent_statement: Failures of critical security control systems are detected, reported, and responded
+    to promptly.
+  mapped_by:
+  - SEC-012
+  verification: secondary-source-id
+- id: 11.5.2
+  title: A change-detection mechanism is deployed to alert personnel to unauthorized modification of critical
+    files.
+  parent_statement: Network intrusions and unexpected file changes are detected and responded to.
+  mapped_by:
+  - SEC-015
+  verification: secondary-source-id
+- id: 12.5.1
+  title: An inventory of system components that are in scope for PCI DSS is maintained and kept current.
+  parent_statement: null
+  mapped_by:
+  - SEC-013
+  verification: pending-primary-source

@@ -1,0 +1,86 @@
+# Generated in Phase 1 from the sources named under `sources`. Edit by hand only to record
+# verification results; keep IDs in sync with controls/control-catalog.yaml.
+framework:
+  key: soc2_tsc_2017
+  name: AICPA 2017 Trust Services Criteria for Security, Availability, Processing Integrity, Confidentiality,
+    and Privacy
+  version: 2017 TSC (with revised points of focus, 2022)
+  sources:
+  - name: Prowler compliance definition prowler/compliance/aws/soc2_aws.json (Apache-2.0)
+    url: https://github.com/prowler-cloud/prowler/blob/master/prowler/compliance/aws/soc2_aws.json
+    accessed: '2026-11-24'
+    authority: secondary (transcribed criteria text)
+  - name: AICPA Trust Services Criteria
+    url: https://www.aicpa-cima.com/resources/download/2017-trust-services-criteria-with-revised-points-of-focus-2022
+    accessed: null
+    authority: 'primary: NOT reachable from the Phase 1 environment'
+  notes: SOC 2 is an attestation report on an organisation's controls. Technical checks can only supply
+    evidence toward a criterion; they never satisfy one alone.
+requirements:
+- id: A1.2
+  title: "(author summary) The entity authorizes, designs, develops or acquires, implements, operates, approves, maintains, and monitors environmental protections, software, data backup processes, and recovery infrastructure to meet its objectives"
+  mapped_by:
+  - SEC-003
+  verification: pending-primary-source
+- id: CC6.1
+  title: The entity implements logical access security software, infrastructure, and architectures over
+    protected information assets to protect them from security events to meet the entity's objectives
+  mapped_by:
+  - SEC-001
+  - SEC-002
+  - SEC-007
+  - SEC-008
+  - SEC-009
+  - SEC-011
+  - SEC-013
+  verification: secondary-source
+- id: CC6.2
+  title: Prior to issuing system credentials and granting system access, the entity registers and authorizes
+    new internal and external users whose access is administered by the entity
+  mapped_by:
+  - SEC-011
+  verification: secondary-source
+- id: CC6.3
+  title: The entity authorizes, modifies, or removes access to data, software, functions, and other protected
+    information assets based on roles, responsibilities, or the system design and changes, giving consideration
+    to the concepts of least privilege and segregation of duties, to meet the entity’s objectives
+  mapped_by:
+  - SEC-010
+  verification: secondary-source
+- id: CC6.6
+  title: The entity implements logical access security measures to protect against threats from sources
+    outside its system boundaries
+  mapped_by:
+  - SEC-001
+  - SEC-005
+  - SEC-006
+  verification: secondary-source
+- id: CC6.7
+  title: The entity restricts the transmission, movement, and removal of information to authorized internal
+    and external users and processes, and protects it during transmission, movement, or removal to meet
+    the entity’s objectives
+  mapped_by:
+  - SEC-004
+  verification: secondary-source
+- id: CC7.1
+  title: To meet its objectives, the entity uses detection and monitoring procedures to identify (1) changes
+    to configurations that result in the introduction of new vulnerabilities, and (2) susceptibilities
+    to newly discovered vulnerabilities
+  mapped_by:
+  - SEC-015
+  verification: secondary-source
+- id: CC7.2
+  title: The entity monitors system components and the operation of those components for anomalies that
+    are indicative of malicious acts, natural disasters, and errors affecting the entity's ability to
+    meet its objectives; anomalies are analyzed to determine whether they represent security events
+  mapped_by:
+  - SEC-012
+  - SEC-014
+  - SEC-015
+  verification: secondary-source
+- id: CC8.1
+  title: The entity authorizes, designs, develops or acquires, configures, documents, tests, approves,
+    and implements changes to infrastructure, data, software, and procedures to meet its objectives
+  mapped_by:
+  - SEC-015
+  verification: secondary-source
