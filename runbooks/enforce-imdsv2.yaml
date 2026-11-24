@@ -1,0 +1,108 @@
+# SSM Automation document: acscg-EnforceImdsV2 (SEC-008). Mode 3 (always approval).
+# No EC2 instance is deployed without separate approval; validated offline and with synthetic events.
+schemaVersion: "0.3"
+description: Require IMDSv2 session tokens on an allowlisted instance, after approval.
+assumeRole: "{{ AutomationAssumeRole }}"
+parameters:
+  AutomationAssumeRole:
+    type: String
+    allowedPattern: "^arn:aws[a-z-]*:iam::\\d{12}:role/acscg-[a-z]+-rem-ec2-exec$"
+  FindingKey:
+    type: String
+    allowedPattern: "^[0-9a-f]{64}$"
+  RequestId:
+    type: String
+    allowedPattern: "^[0-9a-f]{32}$|^req-[0-9]+$"
+  RequireApproval:
+    type: String
+    allowedValues: ["true"]
+    default: "true"
+  Approvers:
+    type: StringList
+  InstanceId:
+    type: String
+    allowedPattern: "^i-[0-9a-f]{8,17}$"
+  PreviousHttpTokens:
+    type: String
+    allowedValues: ["optional", "required"]
+    default: "optional"
+mainSteps:
+  - name: AssertAndCapture
+    action: aws:executeScript
+    onFailure: Abort
+    inputs:
+      Runtime: python3.11
+      Handler: handler
+      InputPayload:
+        InstanceId: "{{ InstanceId }}"
+      Script: |-
+        import boto3
+
+        def handler(events, context):
+            reservations = boto3.client("ec2").describe_instances(InstanceIds=[events["InstanceId"]])["Reservations"]
+            options = reservations[0]["Instances"][0].get("MetadataOptions", {})
+            if options.get("HttpTokens") != "optional":
+                raise ValueError("IMDSv2 already required")
+            return {"Before": options.get("HttpTokens")}
+  - name: ApprovalRequired
+    action: aws:branch
+    inputs:
+      Choices:
+        - NextStep: Approve
+          Variable: "{{ RequireApproval }}"
+          StringEquals: "true"
+      Default: Approve
+  - name: Approve
+    action: aws:approve
+    timeoutSeconds: 14400
+    onFailure: Abort
+    inputs:
+      Approvers: "{{ Approvers }}"
+      MinRequiredApprovals: 1
+      Message: "ACSCG finding {{ FindingKey }}: require IMDSv2 on {{ InstanceId }}. Confirm the workload's SDKs support IMDSv2."
+    nextStep: RequireTokens
+  - name: RequireTokens
+    action: aws:executeAwsApi
+    onFailure: Abort
+    inputs:
+      Service: ec2
+      Api: ModifyInstanceMetadataOptions
+      InstanceId: "{{ InstanceId }}"
+      HttpTokens: required
+  - name: Reevaluate
+    action: aws:executeAwsApi
+    onFailure: Continue
+    inputs:
+      Service: config
+      Api: StartConfigRulesEvaluation
+      ConfigRuleNames:
+        - acscg-sec008-imdsv2
+  - name: Verify
+    action: aws:waitForAwsResourceProperty
+    timeoutSeconds: 300
+    onFailure: step:Rollback
+    inputs:
+      Service: ec2
+      Api: DescribeInstances
+      InstanceIds:
+        - "{{ InstanceId }}"
+      PropertySelector: "$.Reservations[0].Instances[0].MetadataOptions.HttpTokens"
+      DesiredValues:
+        - required
+    isEnd: true
+  - name: Rollback
+    action: aws:executeScript
+    onFailure: Abort
+    inputs:
+      Runtime: python3.11
+      Handler: handler
+      InputPayload:
+        InstanceId: "{{ InstanceId }}"
+        Previous: "{{ PreviousHttpTokens }}"
+      Script: |-
+        import boto3
+
+        def handler(events, context):
+            boto3.client("ec2").modify_instance_metadata_options(InstanceId=events["InstanceId"], HttpTokens=events["Previous"])
+            raise RuntimeError("verification failed; previous metadata options restored")
+    isEnd: true

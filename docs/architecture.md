@@ -1,6 +1,6 @@
 # Architecture
 
-**Status: Phase 1 design. Nothing in this document is deployed.** Status vocabulary (ADR 0001):
+**Status: Phase 2. Every component below is implemented as code and tested offline (🧱/✅). Nothing is deployed (☁️ starts in Phase 3).** Status vocabulary (ADR 0001):
 📝 planned · 🧱 implemented · ✅ tested offline · ☁️ verified in AWS.
 
 ## 1. Purpose
@@ -203,29 +203,56 @@ A remediation runs only if **all** of these hold. Each one is checked by code an
 
 <!-- diagram:remediation-flow -->
 ```mermaid
-%% Finding and remediation lifecycle (states stored in DynamoDB; every transition writes evidence).
+%% Finding and remediation lifecycle. Generated from findings_processor/lifecycle.py TRANSITIONS
+%% (tests/unit/test_lifecycle_diagram.py keeps them identical). Every transition writes evidence.
 stateDiagram-v2
-  [*] --> OPEN: NON_COMPLIANT / finding received
+  [*] --> COMPLIANT: first evaluation compliant
+  [*] --> OPEN: violation detected
+  COMPLIANT --> OPEN: violation detected
+  OPEN --> PENDING_APPROVAL: Mode 3 started
+  OPEN --> REJECTED_POLICY: gatekeeper denies
+  OPEN --> REMEDIATING: Mode 2 started
+  OPEN --> REMEDIATION_FAILED: runbook could not start
+  OPEN --> REPORTED: report-only / not eligible
+  OPEN --> RESOLVED_EXTERNALLY: compliant without platform action
   OPEN --> SUPPRESSED_EXCEPTION: approved, unexpired exception
-  SUPPRESSED_EXCEPTION --> OPEN: exception expires
-  OPEN --> REPORTED: Mode 1 (report-only) or eligibility = report_only
-  OPEN --> REJECTED_POLICY: gatekeeper denies (flag off, not allowlisted,<br/>account/region/action mismatch, prohibited target)
-  OPEN --> PENDING_APPROVAL: Mode 3 request created
-  OPEN --> REMEDIATING: Mode 2 authorised (auto, low risk)
-  PENDING_APPROVAL --> REMEDIATION_REJECTED: approver rejects
+  SUPPRESSED_EXCEPTION --> OPEN: exception expired
+  SUPPRESSED_EXCEPTION --> RESOLVED_EXTERNALLY: compliant without platform action
+  REPORTED --> RESOLVED_EXTERNALLY: compliant without platform action
+  REPORTED --> SUPPRESSED_EXCEPTION: approved exception
+  REJECTED_POLICY --> PENDING_APPROVAL: retry (attempts < 2)
+  REJECTED_POLICY --> REMEDIATING: retry (attempts < 2)
+  REJECTED_POLICY --> REMEDIATION_FAILED: retry could not start
+  REJECTED_POLICY --> RESOLVED_EXTERNALLY: compliant without platform action
+  REJECTED_POLICY --> SUPPRESSED_EXCEPTION: approved exception
   PENDING_APPROVAL --> APPROVAL_EXPIRED: timeout (4 h)
   PENDING_APPROVAL --> REMEDIATING: approved
-  REMEDIATING --> VERIFYING: action succeeded
-  REMEDIATING --> REMEDIATION_FAILED: action failed (retry ≤ 2, then stop)
-  VERIFYING --> VERIFIED_RESOLVED: re-evaluation COMPLIANT
-  VERIFYING --> VERIFICATION_FAILED: still NON_COMPLIANT → rollback if supported, escalate
-  REPORTED --> RESOLVED_EXTERNALLY: owner fixed, Config COMPLIANT
-  REMEDIATION_REJECTED --> RESOLVED_EXTERNALLY
-  APPROVAL_EXPIRED --> RESOLVED_EXTERNALLY
-  REJECTED_POLICY --> RESOLVED_EXTERNALLY
+  PENDING_APPROVAL --> REMEDIATION_FAILED: execution failed
+  PENDING_APPROVAL --> REMEDIATION_REJECTED: approver rejects
+  REMEDIATING --> REMEDIATION_FAILED: runbook failed (≤ 2 attempts)
+  REMEDIATING --> VERIFYING: runbook succeeded
+  VERIFYING --> VERIFICATION_FAILED: still non-compliant, rollback + escalate
+  VERIFYING --> VERIFIED_RESOLVED: re-evaluation compliant
+  REMEDIATION_REJECTED --> RESOLVED_EXTERNALLY: compliant without platform action
+  REMEDIATION_REJECTED --> SUPPRESSED_EXCEPTION: approved exception
+  APPROVAL_EXPIRED --> PENDING_APPROVAL: retry (attempts < 2)
+  APPROVAL_EXPIRED --> REJECTED_POLICY: retry denied
+  APPROVAL_EXPIRED --> REMEDIATING: retry (attempts < 2)
+  APPROVAL_EXPIRED --> REMEDIATION_FAILED: retry could not start
+  APPROVAL_EXPIRED --> RESOLVED_EXTERNALLY: compliant without platform action
+  APPROVAL_EXPIRED --> SUPPRESSED_EXCEPTION: approved exception
+  REMEDIATION_FAILED --> PENDING_APPROVAL: retry (attempts < 2)
+  REMEDIATION_FAILED --> REJECTED_POLICY: retry denied
+  REMEDIATION_FAILED --> REMEDIATING: retry (attempts < 2)
+  REMEDIATION_FAILED --> RESOLVED_EXTERNALLY: compliant without platform action
+  REMEDIATION_FAILED --> SUPPRESSED_EXCEPTION: approved exception
+  VERIFICATION_FAILED --> RESOLVED_EXTERNALLY: compliant without platform action
+  VERIFICATION_FAILED --> SUPPRESSED_EXCEPTION: approved exception
+  VERIFIED_RESOLVED --> OPEN: regression
+  RESOLVED_EXTERNALLY --> OPEN: regression
   VERIFIED_RESOLVED --> [*]
   RESOLVED_EXTERNALLY --> [*]
-  VERIFIED_RESOLVED --> OPEN: regression (new NON_COMPLIANT)
+  COMPLIANT --> [*]
 ```
 <!-- /diagram -->
 
@@ -382,46 +409,38 @@ execution result, updated compliance state, verification timestamp, SHA-256 chec
 No new AWS accounts are created and no organization policies are modified. The Enterprise Landing
 Zone project stays separate.
 
-## 9. Terraform module design
+## 9. Terraform module design (🧱 implemented, ✅ `terraform test`)
 
 ```
 terraform/
-├── bootstrap/                 # once per account, run from CloudShell, local → S3 state migration
-│   ├── state.tf               # acscg-tfstate-<acct>-<region>: SSE-KMS, versioning, TLS-only, native S3 lock (use_lockfile)
-│   ├── oidc_roles.tf          # plan / apply / report / cleanup roles, immutable OIDC subjects
-│   ├── boundary.tf            # acscg-workload-boundary (+ explicit denies on audit services, other projects)
-│   └── budget.tf              # $25 budget filtered on Project=acscg
-├── modules/
-│   ├── iam-oidc/              # role + trust builder; OIDC provider by data source unless create_oidc_provider
-│   ├── security-config/       # ownership_mode create|integrate; recorder limited to resource types; rules from catalog
-│   ├── security-hub/          # ownership_mode disabled|integrate|create; no default standards; per-control enablement
-│   ├── guardduty/             # ownership_mode disabled|integrate|create; all optional protection plans off
-│   ├── cloudtrail/            # integrate (data source + validation) by default; create only if explicitly approved
-│   ├── eventbridge/           # rules + DLQ wiring from a source map
-│   ├── compliance-engine/     # findings-processor Lambda, DynamoDB table, DLQ, alarms
-│   ├── remediation/           # gatekeeper Lambda, SSM documents, per-runbook execution roles, allowlist
-│   ├── evidence-store/        # KMS key, bucket, Object Lock, policies, lifecycle
-│   ├── notifications/         # SNS topic (KMS), subscriptions (e-mail passed as sensitive variable)
-│   ├── dashboard/             # CloudWatch dashboard + alarms
-│   └── budgets/               # tag-filtered cost budget, alert thresholds 50/80/100 % (+forecast)
-└── envs/{dev,staging,prod}/   # thin root modules: providers, backend.hcl.example, tfvars
+├── bootstrap/                 # once per account, from CloudShell (Phase 3): local → S3 state migration
+│   ├── state.tf               # acscg-tfstate-<acct>-<region>: SSE-KMS, versioning, TLS-only, native locking (use_lockfile)
+│   ├── ci_roles.tf            # <env>-plan / <env>-apply / <env>-cleanup + report roles (immutable OIDC subjects)
+│   ├── boundary.tf            # acscg-workload-boundary: project data only, explicit denies (security-model §2)
+│   └── tests/                 # policy sizes, trust subjects, boundary-only role creation, region guard
+├── modules/                   # 12 modules, each with tests/*.tftest.hcl (mock providers)
+│   ├── iam-oidc  security-config  security-hub  guardduty  cloudtrail  eventbridge
+│   └── compliance-engine  remediation  evidence-store  notifications  dashboard  budgets
+├── stack/                     # ONE root for all environments (ADR 0012) + isolated test fixtures
+│   └── tests/                 # stack.tftest.hcl (scenarios) + environments.tftest.hcl (per-env invariants)
+└── envs/{dev,staging,prod}/   # terraform.tfvars + backend.hcl.example only
 ```
 
-Module conventions:
+Module conventions (as implemented):
 
-- `required_version` and every provider pinned (`~>` minor). Lock file committed for root modules only.
-- `aws_account_id` input validated (`^[0-9]{12}$`) and asserted against `data.aws_caller_identity`
-  through a `check` block plus `allowed_account_ids` on the provider (wrong account → plan fails).
-- Region allowlist variable (`["us-east-2"]`), validated.
-- `default_tags`: `Project=acscg`, `Environment`, `ManagedBy=terraform`, `Owner`, `DataClassification`, `Repository`.
-- Every feature flag is explicit: `enable_security_hub`, `enable_guardduty`, `config_ownership_mode`,
-  `remediation_mode`, `remediation_enabled`, `allow_synthetic_events`. Defaults are the safest values.
-- `integrate` mode uses **data sources only**. No `import` blocks for pre-existing services. A
-  test asserts the plan contains no create/update/delete for those resource types in `integrate` mode.
-- `prevent_destroy` on the evidence bucket and KMS key in staging/prod. In dev, cleanup uses the
-  approved cleanup workflow (Phase 9).
-- Tests: `terraform test` with `mock_provider "aws"` per module (validation rules, guardrails,
-  no-ownership assertions, IAM policy contents), as in Project 2.
+- `required_version >= 1.10` (native S3 locking), AWS provider `~> 6.73` (tested with 6.73.0).
+  Root lock files are generated in Phase 3 (registry access).
+- The account is enforced by `allowed_account_ids` plus a `check` block. Region allowlist: `us-east-2`.
+- `default_tags`: Project, Environment, ManagedBy, Owner, DataClassification, Repository.
+- Safest defaults: `remediation_mode = report_only`, `remediation_enabled = false`, Security Hub
+  and GuardDuty `disabled`, Config and CloudTrail `integrate`, synthetic events off, fixtures off.
+- `integrate` mode creates nothing for the service (tested). The plan guard additionally rejects
+  any change to those resource types unless the matching mode is `create`.
+- Security-relevant policies (OIDC trust, runbook execution, gatekeeper, evidence bucket) are
+  rendered with `jsonencode` so tests can assert their exact statements.
+- Lambda: Python 3.13, arm64, reserved concurrency, X-Ray `Active`, CMK-encrypted environment,
+  `Text` log format (the code writes masked JSON lines; ADR 0013), DLQ + bounded retries.
+- DynamoDB PITR is on in every environment (the table is tiny). Deletion protection is on in prod.
 
 ## 10. Naming and tagging
 

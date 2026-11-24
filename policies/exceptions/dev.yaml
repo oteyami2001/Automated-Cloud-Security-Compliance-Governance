@@ -1,0 +1,3 @@
+# Control exceptions for dev (docs/remediation-runbook.md §6). Each entry expires within 90 days
+# (or the control's stricter maximum) and is loaded into DynamoDB (EXC# items) by Terraform.
+exceptions: []

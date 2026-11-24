@@ -13,3 +13,5 @@
 | [0009](0009-idempotency-and-deduplication.md) | Idempotency with DynamoDB conditional writes and a canonical finding key | Accepted |
 | [0010](0010-serverless-python-313.md) | Serverless runtime: Python 3.13 Lambda (arm64), zip packages, no persistent compute | Accepted |
 | [0011](0011-cost-guardrails.md) | Cost guardrails: scoped recording, disabled optional services, tag budget, short windows | Accepted |
+| [0012](0012-single-stack-root-per-environment-tfvars.md) | One stack root with per-environment variable files | Accepted |
+| [0013](0013-runtime-dependencies-and-policy-delivery.md) | Standard-library runtime and a Terraform-rendered policy parameter | Accepted |

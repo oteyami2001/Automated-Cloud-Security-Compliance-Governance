@@ -1,1 +1,1 @@
-📝 Planned (see docs/roadmap.md, Phase 2).
+Reserved for Phase 5+ tests against deployed resources (read-only checks of the dev stack).

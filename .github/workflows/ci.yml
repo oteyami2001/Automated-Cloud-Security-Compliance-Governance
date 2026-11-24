@@ -1,0 +1,171 @@
+# Continuous integration (Phase 2). No AWS credentials: every job runs offline.
+# Third-party actions are pinned to full commit SHAs, each checked against its release tag.
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TERRAFORM_VERSION: "1.17.2"
+  TFLINT_VERSION: "v0.55.1"
+  TRIVY_VERSION: "v0.76.1"
+
+jobs:
+  python:
+    name: python (tests, lint, SAST, catalog, docs)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Install pinned, hash-verified dependencies
+        run: python -m pip install --require-hashes --no-deps -r requirements-dev.lock
+      - name: Ruff lint and format
+        run: |
+          ruff check .
+          ruff format --check .
+      - name: Bandit (SAST)
+        run: bandit -q -r src scripts -c pyproject.toml
+      - name: Control catalog and framework mappings
+        run: python scripts/validate_catalog.py
+      - name: Generated docs and packaged catalog are current
+        run: |
+          python scripts/render_control_tables.py --check
+          python scripts/sync_diagrams.py --check
+          python scripts/build_lambda.py --check
+      - name: Scanner suppressions are justified and registered
+        run: python scripts/check_suppressions.py
+      - name: Tests (coverage gate 90 %)
+        run: python -m pytest --cov=src/acscg --cov-report=term-missing --cov-fail-under=90
+      - name: Build the Lambda package (reproducible)
+        run: |
+          python scripts/build_lambda.py | tee build.txt
+          python scripts/build_lambda.py | diff - build.txt
+          echo "### Lambda package" >> "$GITHUB_STEP_SUMMARY"
+          cat build.txt >> "$GITHUB_STEP_SUMMARY"
+
+  terraform:
+    name: terraform (fmt, validate, test)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      - name: Format
+        run: terraform fmt -check -recursive terraform
+      - name: Validate and test every module and root (mocked providers)
+        run: |
+          set -euo pipefail
+          for dir in terraform/modules/* terraform/bootstrap terraform/stack; do
+            echo "::group::$dir"
+            terraform -chdir="$dir" init -backend=false -input=false -no-color >/dev/null
+            terraform -chdir="$dir" validate -no-color
+            if [ "$dir" = terraform/stack ]; then
+              terraform -chdir="$dir" test -no-color -filter=tests/stack.tftest.hcl
+            else
+              terraform -chdir="$dir" test -no-color
+            fi
+            echo "::endgroup::"
+          done
+      - name: Environment invariants (dev, staging, prod)
+        run: |
+          set -euo pipefail
+          for env in dev staging prod; do
+            terraform -chdir=terraform/stack test -no-color \
+              -filter=tests/environments.tftest.hcl -var-file="../envs/$env/terraform.tfvars"
+          done
+
+  tflint:
+    name: tflint (terraform + aws rulesets)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
+        with:
+          tflint_version: ${{ env.TFLINT_VERSION }}
+      - name: TFLint (terraform + aws rulesets)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          tflint --init --config "$GITHUB_WORKSPACE/.tflint.hcl"
+          tflint --recursive --config "$GITHUB_WORKSPACE/.tflint.hcl" --format compact
+
+  checkov:
+    name: checkov (terraform + github actions)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Install scanners (hash-verified)
+        run: python -m pip install --require-hashes -r requirements-scan.lock
+      - name: Checkov (Terraform and GitHub Actions)
+        run: checkov -d . --framework terraform github_actions --quiet --compact --skip-path '\.terraform'
+
+  trivy:
+    name: trivy (misconfig, secrets, vulnerabilities)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: ${{ env.TRIVY_VERSION }}
+          scan-type: fs
+          scan-ref: .
+          scanners: misconfig,secret,vuln
+          skip-dirs: dist
+          exit-code: "1"
+          format: table
+
+  workflow-security:
+    name: workflow security (zizmor, actionlint)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Install scanners (hash-verified)
+        run: python -m pip install --require-hashes -r requirements-scan.lock
+      - name: zizmor
+        run: zizmor --offline --min-severity low .github/workflows
+      - name: actionlint
+        run: actionlint

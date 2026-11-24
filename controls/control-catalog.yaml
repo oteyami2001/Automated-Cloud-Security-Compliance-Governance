@@ -98,7 +98,7 @@ controls:
         Run the Config rule evaluation again (StartConfigRulesEvaluation) and confirm COMPLIANT,
         then read GetPublicAccessBlock directly and compare with the expected configuration.
       expected: COMPLIANT within one evaluation cycle; all four settings true
-    implementation_status: planned
+    implementation_status: implemented
 
   - id: SEC-002
     title: S3 default encryption
@@ -145,7 +145,7 @@ controls:
     verification:
       procedure: Re-evaluate the Config rule; read GetBucketEncryption
       expected: COMPLIANT
-    implementation_status: planned
+    implementation_status: implemented
 
   - id: SEC-003
     title: S3 versioning
@@ -186,7 +186,7 @@ controls:
     verification:
       procedure: Re-evaluate the Config rule; read GetBucketVersioning
       expected: Status=Enabled
-    implementation_status: planned
+    implementation_status: implemented
 
   - id: SEC-004
     title: S3 HTTPS-only access
@@ -220,7 +220,7 @@ controls:
     verification:
       procedure: Re-evaluate; attempt an HTTP (non-TLS) GetObject on a test bucket from the validation script and expect AccessDenied
       expected: COMPLIANT and non-TLS request denied
-    implementation_status: planned
+    implementation_status: implemented
 
   - id: SEC-005
     title: Unrestricted SSH ingress
@@ -271,7 +271,7 @@ controls:
     verification:
       procedure: Re-evaluate the Config rule and re-describe the group; confirm only the offending rule was removed (rule count -1, others unchanged)
       expected: COMPLIANT; all other rules byte-identical
-    implementation_status: planned
+    implementation_status: implemented
 
   - id: SEC-006
     title: Unrestricted RDP ingress
@@ -314,7 +314,7 @@ controls:
     verification:
       procedure: Same as SEC-005
       expected: COMPLIANT; all other rules unchanged
-    implementation_status: planned
+    implementation_status: implemented
 
   - id: SEC-007
     title: Unencrypted EBS volumes
@@ -350,7 +350,7 @@ controls:
     verification:
       procedure: Re-evaluate after the owner replaces the volume
       expected: COMPLIANT
-    implementation_status: planned
+    implementation_status: implemented
 
   - id: SEC-008
     title: EC2 IMDSv2 enforcement
@@ -397,7 +397,7 @@ controls:
     verification:
       procedure: Re-evaluate; DescribeInstances MetadataOptions
       expected: HttpTokens=required
-    implementation_status: planned
+    implementation_status: implemented
 
   - id: SEC-009
     title: IAM users without MFA
@@ -431,7 +431,7 @@ controls:
     verification:
       procedure: Re-evaluate after the user enrols MFA
       expected: COMPLIANT
-    implementation_status: planned
+    implementation_status: implemented
 
   - id: SEC-010
     title: Excessively permissive IAM policies
@@ -473,7 +473,7 @@ controls:
     verification:
       procedure: Re-evaluate after the owner's change; confirm the policy version changed
       expected: COMPLIANT
-    implementation_status: planned
+    implementation_status: implemented
 
   - id: SEC-011
     title: Long-lived IAM access keys
@@ -509,7 +509,7 @@ controls:
     verification:
       procedure: Re-evaluate after rotation
       expected: COMPLIANT
-    implementation_status: planned
+    implementation_status: implemented
 
   - id: SEC-012
     title: CloudTrail logging status
@@ -551,7 +551,7 @@ controls:
     verification:
       procedure: GetTrailStatus shows IsLogging=true and a LatestDeliveryTime newer than the event
       expected: Logging active
-    implementation_status: planned
+    implementation_status: implemented
 
   - id: SEC-013
     title: Required resource tags
@@ -594,7 +594,7 @@ controls:
     verification:
       procedure: Re-evaluate; GetResources tag read
       expected: COMPLIANT
-    implementation_status: planned
+    implementation_status: implemented
 
   - id: SEC-014
     title: CloudWatch log retention
@@ -641,7 +641,7 @@ controls:
     verification:
       procedure: Re-evaluate; DescribeLogGroups retentionInDays
       expected: COMPLIANT
-    implementation_status: planned
+    implementation_status: implemented
 
   - id: SEC-015
     title: Unauthorized configuration changes
@@ -702,4 +702,4 @@ controls:
     verification:
       procedure: Make a controlled console change to a test security group (scenario 15); confirm a finding is created and the drift workflow reports the address
       expected: Finding created within 5 minutes; drift workflow exits with drift detected
-    implementation_status: planned
+    implementation_status: implemented

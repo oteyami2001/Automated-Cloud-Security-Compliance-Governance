@@ -1,25 +1,26 @@
 # Validation scenarios
 
-**Status: 📝 planned.** Each scenario is first proven offline (✅, Phase 2/5/6 unit and integration
+**Status: offline proofs done in Phase 2 (see `docs/portfolio-evidence.md`). AWS runs are Phase 9.** Each scenario is first proven offline (✅, Phase 2/5/6 unit and integration
 tests with mocked AWS), then in AWS (☁️, Phase 9) on isolated, project-owned test resources.
 Synthetic events are used where a real violation would be unsafe or need forbidden infrastructure.
 Results are recorded in `docs/portfolio-evidence.md` with GitHub run IDs, AWS evidence keys and UTC
 timestamps. Nothing is recorded that was not observed.
 
-Test fixtures (created by a separate, approved `terraform/envs/dev` test fixture with
-`enable_test_fixtures = true`, never internet-reachable):
+Test fixtures (`terraform/stack/fixtures.tf`, `enable_test_fixtures = true` in dev only; each violation is a
+separate flag, off by default, enabled only in a reviewed scenario PR; nothing is internet-reachable):
 
 | Fixture | Purpose | Exposure |
 |---|---|---|
 | `acscg-dev-fixture-sg` in a fixture VPC with **no internet gateway** and no ENIs attached | SEC-005/006 violations | None: the group is not attached to anything, and the VPC has no route to the internet |
 | `acscg-dev-fixture-bucket` (empty) | SEC-001/013 | Account-level Block Public Access stays on, so a bucket-level BPA gap is detectable but **cannot** make the bucket public |
-| `acscg-dev-fixture-logs` log group (empty) | SEC-014 | None |
+| `/acscg/dev/fixture` log group (empty) | SEC-014 (scenario 8: `fixture_log_group_violations` removes retention) | None |
+| `acscg-dev-fixture-untagged-sg` (separate un-tagged provider alias, unattached) | SEC-013 (scenario 3: `fixture_missing_tags`) | None |
 
 | # | Scenario | Method | Controls | Expected result / evidence | Offline | AWS |
 |---|---|---|---|---|---|---|
 | 1 | Compliant resource passes | Fixture bucket with all settings correct | SEC-001–004 | Config `COMPLIANT`. No finding opened. Report counts it as passed | P2 | P9 |
 | 2 | Noncompliant security group detected | Add ingress 22 from 0.0.0.0/0 to the unattached fixture SG (Terraform flag, approved apply) | SEC-005 | `NON_COMPLIANT` → finding OPEN, severity high, SNS message, evidence object | P2 | P9 |
-| 3 | Missing required tags detected | Fixture log group created without `Owner` | SEC-013 | `NON_COMPLIANT` with the missing keys listed | P2 | P9 |
+| 3 | Missing required tags detected | Un-tagged fixture security group (`fixture_missing_tags`) | SEC-013 | `NON_COMPLIANT` with the missing keys listed | P2 | P9 |
 | 4 | S3 protection violation detected safely | Disable one bucket-level BPA setting on the empty fixture bucket. The account-level block remains, so nothing becomes public | SEC-001 | Finding OPEN. Live check proves the bucket is still not public (account block). Nothing exposed | P2 | P9 |
 | 5 | Insecure Terraform change blocked by CI | PR adding an SG rule 0.0.0.0/0:22 and an unencrypted bucket | SEC-005, SEC-002 | `ci` run fails on Checkov/Trivy + plan-guard/policy test. Run ID recorded. PR closed unmerged | P8 | P8 (GitHub) |
 | 6 | Duplicate events → no duplicate remediation | Replay the same Config event 3× (synthetic copy for offline; EventBridge archive replay in AWS if enabled) | SEC-005 | 1 finding, 1 notification, ≤1 remediation request, 2 `duplicate_event` log lines | P2 | P9 |

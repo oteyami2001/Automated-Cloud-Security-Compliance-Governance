@@ -29,21 +29,21 @@ networking 5.x → 6.x), which the catalog records explicitly.
 <!-- generated:control-summary -->
 | ID | Control | Severity | Detection | Remediation | Approval | Status |
 |---|---|---|---|---|---|---|
-| SEC-001 | S3 public access protection | high | config_managed_rule: S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED, S3_ACCOUNT_LEVEL_PUBLIC_ACCESS_BLOCKS_PERIODIC, S3_BUCKET_PUBLIC_READ_PROHIBITED, S3_BUCKET_PUBLIC_WRITE_PROHIBITED | Mode 2 (auto, allowlisted) | no | planned |
-| SEC-002 | S3 default encryption | medium | config_managed_rule: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED, S3_DEFAULT_ENCRYPTION_KMS | Report only | no | planned |
-| SEC-003 | S3 versioning | low | config_managed_rule: S3_BUCKET_VERSIONING_ENABLED | Report only | no | planned |
-| SEC-004 | S3 HTTPS-only access | medium | config_managed_rule: S3_BUCKET_SSL_REQUESTS_ONLY | Report only | no | planned |
-| SEC-005 | Unrestricted SSH ingress | high | config_managed_rule: INCOMING_SSH_DISABLED | Mode 3 (human approval) | required | planned |
-| SEC-006 | Unrestricted RDP ingress | high | config_managed_rule: RESTRICTED_INCOMING_TRAFFIC | Mode 3 (human approval) | required | planned |
-| SEC-007 | Unencrypted EBS volumes | medium | config_managed_rule: ENCRYPTED_VOLUMES, EC2_EBS_ENCRYPTION_BY_DEFAULT | Report only | no | planned |
-| SEC-008 | EC2 IMDSv2 enforcement | medium | config_managed_rule: EC2_IMDSV2_CHECK | Mode 3 (human approval) | required | planned |
-| SEC-009 | IAM users without MFA | high | config_managed_rule: MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS, IAM_USER_MFA_ENABLED | Report only | no | planned |
-| SEC-010 | Excessively permissive IAM policies | high | config_managed_rule: IAM_POLICY_NO_STATEMENTS_WITH_ADMIN_ACCESS, IAM_POLICY_NO_STATEMENTS_WITH_FULL_ACCESS | Report only | no | planned |
-| SEC-011 | Long-lived IAM access keys | medium | config_managed_rule: ACCESS_KEYS_ROTATED, IAM_USER_UNUSED_CREDENTIALS_CHECK | Report only | no | planned |
-| SEC-012 | CloudTrail logging status | critical | hybrid: CLOUD_TRAIL_ENABLED, MULTI_REGION_CLOUD_TRAIL_ENABLED, CLOUD_TRAIL_LOG_FILE_VALIDATION_ENABLED, CLOUD_TRAIL_ENCRYPTION_ENABLED + CloudTrail→EventBridge | Escalate (never remediated) | no | planned |
-| SEC-013 | Required resource tags | low | config_managed_rule: REQUIRED_TAGS | Mode 2 (auto, allowlisted) | no | planned |
-| SEC-014 | CloudWatch log retention | low | config_managed_rule: CW_LOGGROUP_RETENTION_PERIOD_CHECK | Mode 2 (auto, allowlisted) | no | planned |
-| SEC-015 | Unauthorized configuration changes | high | cloudtrail_eventbridge: CloudTrail→EventBridge | Report only | no | planned |
+| SEC-001 | S3 public access protection | high | config_managed_rule: S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED, S3_ACCOUNT_LEVEL_PUBLIC_ACCESS_BLOCKS_PERIODIC, S3_BUCKET_PUBLIC_READ_PROHIBITED, S3_BUCKET_PUBLIC_WRITE_PROHIBITED | Mode 2 (auto, allowlisted) | no | implemented |
+| SEC-002 | S3 default encryption | medium | config_managed_rule: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED, S3_DEFAULT_ENCRYPTION_KMS | Report only | no | implemented |
+| SEC-003 | S3 versioning | low | config_managed_rule: S3_BUCKET_VERSIONING_ENABLED | Report only | no | implemented |
+| SEC-004 | S3 HTTPS-only access | medium | config_managed_rule: S3_BUCKET_SSL_REQUESTS_ONLY | Report only | no | implemented |
+| SEC-005 | Unrestricted SSH ingress | high | config_managed_rule: INCOMING_SSH_DISABLED | Mode 3 (human approval) | required | implemented |
+| SEC-006 | Unrestricted RDP ingress | high | config_managed_rule: RESTRICTED_INCOMING_TRAFFIC | Mode 3 (human approval) | required | implemented |
+| SEC-007 | Unencrypted EBS volumes | medium | config_managed_rule: ENCRYPTED_VOLUMES, EC2_EBS_ENCRYPTION_BY_DEFAULT | Report only | no | implemented |
+| SEC-008 | EC2 IMDSv2 enforcement | medium | config_managed_rule: EC2_IMDSV2_CHECK | Mode 3 (human approval) | required | implemented |
+| SEC-009 | IAM users without MFA | high | config_managed_rule: MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS, IAM_USER_MFA_ENABLED | Report only | no | implemented |
+| SEC-010 | Excessively permissive IAM policies | high | config_managed_rule: IAM_POLICY_NO_STATEMENTS_WITH_ADMIN_ACCESS, IAM_POLICY_NO_STATEMENTS_WITH_FULL_ACCESS | Report only | no | implemented |
+| SEC-011 | Long-lived IAM access keys | medium | config_managed_rule: ACCESS_KEYS_ROTATED, IAM_USER_UNUSED_CREDENTIALS_CHECK | Report only | no | implemented |
+| SEC-012 | CloudTrail logging status | critical | hybrid: CLOUD_TRAIL_ENABLED, MULTI_REGION_CLOUD_TRAIL_ENABLED, CLOUD_TRAIL_LOG_FILE_VALIDATION_ENABLED, CLOUD_TRAIL_ENCRYPTION_ENABLED + CloudTrail→EventBridge | Escalate (never remediated) | no | implemented |
+| SEC-013 | Required resource tags | low | config_managed_rule: REQUIRED_TAGS | Mode 2 (auto, allowlisted) | no | implemented |
+| SEC-014 | CloudWatch log retention | low | config_managed_rule: CW_LOGGROUP_RETENTION_PERIOD_CHECK | Mode 2 (auto, allowlisted) | no | implemented |
+| SEC-015 | Unauthorized configuration changes | high | cloudtrail_eventbridge: CloudTrail→EventBridge | Report only | no | implemented |
 <!-- /generated -->
 
 ## 3. Framework mapping matrix

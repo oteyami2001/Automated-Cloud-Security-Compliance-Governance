@@ -1,0 +1,167 @@
+# SSM Automation document: acscg-RestrictSecurityGroupIngress (SEC-005, SEC-006). Mode 3.
+# Safety pattern (docs/security-model.md §4): assert → capture → approve → single change →
+# re-evaluate → verify (only the named rules gone, all other rules identical) → rollback on failure.
+# Terraform sets the AutomationAssumeRole default to acscg-<env>-rem-sg-exec, whose IAM policy is
+# limited to the allowlisted security-group ARNs.
+schemaVersion: "0.3"
+description: Revoke only the named 0.0.0.0/0 or ::/0 ingress rules on an allowlisted security group, after approval.
+assumeRole: "{{ AutomationAssumeRole }}"
+parameters:
+  AutomationAssumeRole:
+    type: String
+    description: Execution role (set by Terraform).
+    allowedPattern: "^arn:aws[a-z-]*:iam::\\d{12}:role/acscg-[a-z]+-rem-sg-exec$"
+  FindingKey:
+    type: String
+    allowedPattern: "^[0-9a-f]{64}$"
+  RequestId:
+    type: String
+    allowedPattern: "^[0-9a-f]{32}$|^req-[0-9]+$"
+  RequireApproval:
+    type: String
+    allowedValues: ["true", "false"]
+    default: "true"
+  Approvers:
+    type: StringList
+    description: IAM principals allowed to approve (from the Terraform-managed policy).
+  SecurityGroupId:
+    type: String
+    allowedPattern: "^sg-[0-9a-f]{8,17}$"
+  SecurityGroupRuleIds:
+    type: StringList
+    allowedPattern: "^sgr-[0-9a-f]{8,17}$"
+mainSteps:
+  - name: AssertAndCapture
+    action: aws:executeScript
+    onFailure: Abort
+    inputs:
+      Runtime: python3.11
+      Handler: handler
+      InputPayload:
+        GroupId: "{{ SecurityGroupId }}"
+        RuleIds: "{{ SecurityGroupRuleIds }}"
+      Script: |-
+        import json
+        import boto3
+
+        OPEN = {"0.0.0.0/0", "::/0"}
+
+        def handler(events, context):
+            ec2 = boto3.client("ec2")
+            rules = ec2.describe_security_group_rules(
+                Filters=[{"Name": "group-id", "Values": [events["GroupId"]]}]
+            )["SecurityGroupRules"]
+            by_id = {r["SecurityGroupRuleId"]: r for r in rules}
+            for rule_id in events["RuleIds"]:
+                rule = by_id.get(rule_id)
+                if rule is None or rule.get("IsEgress"):
+                    raise ValueError(f"rule {rule_id} not found as ingress on the group")
+                if (rule.get("CidrIpv4") or rule.get("CidrIpv6")) not in OPEN:
+                    raise ValueError(f"rule {rule_id} is not open to the internet; refusing")
+            return {"Before": json.dumps(sorted(rules, key=lambda r: r["SecurityGroupRuleId"]), default=str)}
+    outputs:
+      - Name: Before
+        Selector: $.Payload.Before
+        Type: String
+  - name: ApprovalRequired
+    action: aws:branch
+    inputs:
+      Choices:
+        - NextStep: Approve
+          Variable: "{{ RequireApproval }}"
+          StringEquals: "true"
+      Default: Revoke
+  - name: Approve
+    action: aws:approve
+    timeoutSeconds: 14400
+    onFailure: Abort
+    inputs:
+      Approvers: "{{ Approvers }}"
+      MinRequiredApprovals: 1
+      Message: "ACSCG finding {{ FindingKey }}: revoke ingress rules {{ SecurityGroupRuleIds }} on {{ SecurityGroupId }}. Approve only if this is the allowlisted test group."
+    nextStep: Revoke
+  - name: Revoke
+    action: aws:executeAwsApi
+    onFailure: Abort
+    inputs:
+      Service: ec2
+      Api: RevokeSecurityGroupIngress
+      GroupId: "{{ SecurityGroupId }}"
+      SecurityGroupRuleIds: "{{ SecurityGroupRuleIds }}"
+  - name: Reevaluate
+    action: aws:executeAwsApi
+    onFailure: Continue
+    inputs:
+      Service: config
+      Api: StartConfigRulesEvaluation
+      ConfigRuleNames:
+        - acscg-sec005-restricted-ssh
+        - acscg-sec006-restricted-rdp
+  - name: Verify
+    action: aws:executeScript
+    onFailure: step:Rollback
+    inputs:
+      Runtime: python3.11
+      Handler: handler
+      InputPayload:
+        GroupId: "{{ SecurityGroupId }}"
+        RuleIds: "{{ SecurityGroupRuleIds }}"
+        Before: "{{ AssertAndCapture.Before }}"
+      Script: |-
+        import json
+        import boto3
+
+        def handler(events, context):
+            before = {r["SecurityGroupRuleId"]: r for r in json.loads(events["Before"])}
+            after_rules = boto3.client("ec2").describe_security_group_rules(
+                Filters=[{"Name": "group-id", "Values": [events["GroupId"]]}]
+            )["SecurityGroupRules"]
+            after = {r["SecurityGroupRuleId"]: r for r in after_rules}
+            removed = set(events["RuleIds"])
+            if removed & set(after):
+                raise ValueError("a revoked rule is still present")
+            expected = set(before) - removed
+            if set(after) != expected:
+                raise ValueError("rules other than the named ones changed")
+            return {"Verified": True, "Remaining": len(after)}
+    isEnd: true
+  - name: Rollback
+    action: aws:executeScript
+    onFailure: Abort
+    inputs:
+      Runtime: python3.11
+      Handler: handler
+      InputPayload:
+        GroupId: "{{ SecurityGroupId }}"
+        RuleIds: "{{ SecurityGroupRuleIds }}"
+        Before: "{{ AssertAndCapture.Before }}"
+      Script: |-
+        import json
+        import boto3
+
+        def handler(events, context):
+            ec2 = boto3.client("ec2")
+            before = {r["SecurityGroupRuleId"]: r for r in json.loads(events["Before"])}
+            current = {
+                r["SecurityGroupRuleId"]
+                for r in ec2.describe_security_group_rules(
+                    Filters=[{"Name": "group-id", "Values": [events["GroupId"]]}]
+                )["SecurityGroupRules"]
+            }
+            restored = []
+            for rule_id in events["RuleIds"]:
+                rule = before.get(rule_id)
+                if rule is None or rule_id in current:
+                    continue
+                permission = {"IpProtocol": rule["IpProtocol"]}
+                if rule.get("FromPort") is not None:
+                    permission["FromPort"] = rule["FromPort"]
+                    permission["ToPort"] = rule["ToPort"]
+                if rule.get("CidrIpv4"):
+                    permission["IpRanges"] = [{"CidrIp": rule["CidrIpv4"], "Description": rule.get("Description", "")}]
+                else:
+                    permission["Ipv6Ranges"] = [{"CidrIpv6": rule["CidrIpv6"], "Description": rule.get("Description", "")}]
+                ec2.authorize_security_group_ingress(GroupId=events["GroupId"], IpPermissions=[permission])
+                restored.append(rule_id)
+            raise RuntimeError(f"verification failed; rolled back {len(restored)} rule(s)")
+    isEnd: true

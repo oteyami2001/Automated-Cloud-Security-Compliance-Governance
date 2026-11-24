@@ -1,9 +1,10 @@
 # Policies
 
-| Directory | Contents | Status |
+| Path | Contents | Validated by |
 |---|---|---|
-| `remediation/` | Remediation policy: mode, enable flag, approvers, exact-ARN allowlist, protected resources | 📝 draft example only (Phase 2 schema, Phase 6 live) |
-| `exceptions/` | Time-boxed control exceptions (≤ 90 days, approver, ticket) and the scanner-suppression register | 📝 Phase 2 |
-| `iam/` | IAM policy documents and policy tests (boundary, execution roles) | 📝 Phase 2/3 |
+| `remediation/<env>.yaml` | Remediation mode, enable flag, approval timeout, attempt limit, exact-ARN allowlist, protected resources (all report-only and empty as committed) | `schemas/remediation-policy.schema.json`, `remediation_engine.policy.parse_policy`, Terraform preconditions |
+| `exceptions/<env>.yaml` | Time-boxed control exceptions (≤ 90 days, approver, ticket) | `schemas/exceptions.schema.json` |
+| `exceptions/scanner-exceptions.yaml` | Register of every inline scanner suppression | `scripts/check_suppressions.py` (CI) |
+| `iam/` | Reserved for standalone IAM policy documents (current policies are rendered in Terraform and asserted by `terraform test`) | — |
 
-See `docs/security-model.md` for the authorization rules these files feed.
+Authorization rules: `docs/security-model.md`.

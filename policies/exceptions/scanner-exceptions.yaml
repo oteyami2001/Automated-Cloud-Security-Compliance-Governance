@@ -1,0 +1,365 @@
+# Register of every inline scanner suppression (Checkov, Trivy, TFLint, Bandit, Ruff security rules).
+# CI fails if an inline suppression is missing here, lacks a justification, or its review date has
+# passed (scripts/check_suppressions.py). Justifications mirror the inline comments; the design
+# reasons are in the ADRs referenced there. Review every entry by its review_by date.
+suppressions:
+- tool: bandit
+  rule: B104
+  path: src/acscg/common/log.py
+  justification: a CIDR literal kept readable in logs, not a bind address
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV2_AWS_10
+  path: terraform/modules/cloudtrail/main.tf
+  justification: CloudWatch Logs integration is not needed; EventBridge receives the events directly (ADR 0004).
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV2_AWS_11
+  path: terraform/stack/fixtures.tf
+  justification: 'Flow logs are not needed: the fixture VPC has no internet gateway, no subnets and no ENIs.'
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV2_AWS_3
+  path: terraform/modules/guardduty/main.tf
+  justification: Single-account, single-Region project without Organizations delegated administration (ADR 0002).
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV2_AWS_45
+  path: terraform/modules/security-config/main.tf
+  justification: Recording only the catalog's resource types is a deliberate cost decision (ADR 0011); create mode is used only if no recorder exists.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV2_AWS_48
+  path: terraform/modules/security-config/main.tf
+  justification: Recording only the catalog's resource types is a deliberate cost decision (ADR 0011).
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV2_AWS_5
+  path: terraform/stack/fixtures.tf
+  justification: The fixture group is deliberately attached to nothing (validation scenarios 2 and 9-11; docs/validation-scenarios.md).
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV2_AWS_6
+  path: terraform/stack/fixtures.tf
+  justification: A public access block exists (aws_s3_bucket_public_access_block.fixture); Checkov cannot link count-based blocks.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV2_AWS_61
+  path: terraform/stack/fixtures.tf
+  justification: Empty fixture; no lifecycle needed.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV2_AWS_62
+  path: terraform/bootstrap/state.tf
+  justification: Event notifications are not needed for a state bucket.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV2_AWS_62
+  path: terraform/modules/cloudtrail/main.tf
+  justification: Event notifications are not needed for an audit bucket.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV2_AWS_62
+  path: terraform/modules/evidence-store/main.tf
+  justification: Event notifications are not needed; evidence writers are the platform's own Lambdas.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV2_AWS_62
+  path: terraform/modules/security-config/main.tf
+  justification: Event notifications are not needed for Config history files.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV2_AWS_62
+  path: terraform/stack/fixtures.tf
+  justification: Empty test fixture; no notifications needed.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_109
+  path: terraform/modules/evidence-store/main.tf
+  justification: Key administration stays with the account root (IAM decides); service statements are scoped by source account and log-group ARN.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_111
+  path: terraform/modules/evidence-store/main.tf
+  justification: KMS key policies use Resource '*' to mean this key; the root statement is the AWS default administration statement.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_117
+  path: terraform/modules/compliance-engine/main.tf
+  justification: Lambdas call only AWS APIs and expose no endpoint; a VPC would add NAT cost (ADR 0010).
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_117
+  path: terraform/modules/remediation/main.tf
+  justification: Calls only AWS APIs and exposes no endpoint; a VPC would add NAT cost (ADR 0010).
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_144
+  path: terraform/bootstrap/state.tf
+  justification: Cross-Region replication is SCP-denied in the target account (ADR 0002); versioning protects history.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_144
+  path: terraform/modules/cloudtrail/main.tf
+  justification: Cross-Region replication is SCP-denied in the target account (ADR 0002).
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_144
+  path: terraform/modules/evidence-store/main.tf
+  justification: 'Cross-Region replication is not possible: the other US Region is denied by an SCP in the target account (ADR 0002).'
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_144
+  path: terraform/modules/security-config/main.tf
+  justification: Cross-Region replication is SCP-denied in the target account (ADR 0002).
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_144
+  path: terraform/stack/fixtures.tf
+  justification: Empty test fixture; replication is not applicable.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_18
+  path: terraform/bootstrap/state.tf
+  justification: Access logging would need a further bucket; CloudTrail records state access.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_18
+  path: terraform/modules/cloudtrail/main.tf
+  justification: Access logging would need a further bucket; the trail records management calls on this bucket.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_18
+  path: terraform/modules/evidence-store/main.tf
+  justification: Server access logging needs a further log bucket; integrity is provided by Object Lock, versioning and SHA-256 manifests (ADR 0007).
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_18
+  path: terraform/modules/security-config/main.tf
+  justification: Access logging would need a further bucket; only the Config service role writes here.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_18
+  path: terraform/stack/fixtures.tf
+  justification: Empty test fixture; access logging adds nothing.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_18
+  path: tests/security/test_suppressions.py
+  justification: Access logging would need a further log bucket here\n"
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_21
+  path: terraform/stack/fixtures.tf
+  justification: Versioning is intentionally left to SEC-003 detection on this empty fixture.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_24
+  path: terraform/stack/fixtures.tf
+  justification: Deliberate, isolated violation for validation scenario 2 (unattached group, VPC without internet gateway, flag off by default).
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_252
+  path: terraform/modules/cloudtrail/main.tf
+  justification: SNS notifications for log delivery are not needed.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_260
+  path: terraform/stack/fixtures.tf
+  justification: Same deliberate scenario fixture; see above.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_272
+  path: terraform/modules/compliance-engine/main.tf
+  justification: Code signing is replaced by a reproducible package whose SHA-256 is verified in CI and pinned via source_code_hash.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_272
+  path: terraform/modules/remediation/main.tf
+  justification: Reproducible package verified by SHA-256 in CI and pinned via source_code_hash.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_288
+  path: terraform/bootstrap/boundary.tf
+  justification: Object reads are limited to acscg-* buckets; the remaining '*' statement is metadata reads and scoped remediation actions.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_289
+  path: terraform/bootstrap/boundary.tf
+  justification: iam:PassRole is denied outside role/acscg-* and all IAM writes are explicitly denied in this boundary.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_290
+  path: terraform/bootstrap/boundary.tf
+  justification: A boundary is a ceiling, not a grant; writes are limited to acscg-* data resources and each role policy scopes ARNs (tested).
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_338
+  path: terraform/stack/fixtures.tf
+  justification: Retention below one year is the dev policy (30 days); scenario 8 may unset it deliberately.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_35
+  path: terraform/modules/cloudtrail/main.tf
+  justification: Create mode is a fallback that needs separate approval; a CloudTrail-enabled key policy is added then (SSE-S3 meanwhile).
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_355
+  path: terraform/bootstrap/boundary.tf
+  justification: Describe/List/tagging APIs lack resource-level permissions; role policies narrow every change action to allowlisted ARNs.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_356
+  path: terraform/modules/evidence-store/main.tf
+  justification: KMS key policies use Resource '*' to mean this key (not all resources).
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_53
+  path: terraform/stack/fixtures.tf
+  justification: Scenario 4 can disable ONE setting on the empty fixture; account-level BPA still blocks public access.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_54
+  path: terraform/stack/fixtures.tf
+  justification: Scenario 4 fixture, see above.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_55
+  path: terraform/stack/fixtures.tf
+  justification: Scenario 4 fixture, see above.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_56
+  path: terraform/stack/fixtures.tf
+  justification: Scenario 4 fixture, see above.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_66
+  path: terraform/stack/fixtures.tf
+  justification: Scenario 8 fixture may deliberately have no retention (flag off by default).
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: checkov
+  rule: CKV_AWS_67
+  path: terraform/modules/cloudtrail/main.tf
+  justification: Multi-Region trails cannot deliver from the SCP-denied Region; single Region by design (ADR 0002).
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: ruff
+  rule: BLE001
+  path: src/acscg/remediation_engine/live_checks.py
+  justification: any failure to read the resource means "cannot confirm", so the gatekeeper denies
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: ruff
+  rule: BLE001
+  path: src/acscg/remediation_engine/service.py
+  justification: any start failure is recorded as REMEDIATION_FAILED, then the lock is released
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: ruff
+  rule: S102
+  path: tests/unit/test_runbooks.py
+  justification: our own runbook code
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: ruff
+  rule: S104
+  path: src/acscg/common/log.py
+  justification: a CIDR literal kept readable in logs, not a bind address
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: ruff
+  rule: S603
+  path: tests/security/test_plan_guard.py
+  justification: runs this repository's own script with fixed arguments
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: ruff
+  rule: S603
+  path: tests/unit/test_discovery_script.py
+  justification: fixed script path, stubbed aws binary
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: trivy
+  rule: AVD-AWS-0067
+  path: terraform/modules/security-config/main.tf
+  justification: Config rule ARNs contain a random ID only known after creation; the permission is scoped with source_account as AWS documents for custom Config rules.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: trivy
+  rule: AVD-AWS-0089
+  path: terraform/bootstrap/state.tf
+  justification: State bucket access logging would need another bucket; CloudTrail records the API calls.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: trivy
+  rule: AVD-AWS-0089
+  path: terraform/modules/cloudtrail/main.tf
+  justification: Access logging of the audit bucket would need another bucket; the trail records its API calls.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: trivy
+  rule: AVD-AWS-0089
+  path: terraform/modules/evidence-store/main.tf
+  justification: Access logging of the evidence bucket would need another bucket; object-level API activity is attributable through CloudTrail and checksums detect modification.
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: trivy
+  rule: AVD-AWS-0089
+  path: terraform/modules/security-config/main.tf
+  justification: 'Config history bucket: access logging would need another bucket; delivery is by the Config service role only.'
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: trivy
+  rule: AVD-AWS-0089
+  path: terraform/stack/fixtures.tf
+  justification: Empty fixture bucket; access logging adds nothing.
+  owner: oteyami2001
+  review_by: '2027-05-01'

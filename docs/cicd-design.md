@@ -1,6 +1,7 @@
 # CI/CD and DevSecOps design
 
-**Status: 📝 planned.** Workflows are implemented in Phase 8 (CI checks start in Phase 2). Practices
+**Status:** `ci.yml` is 🧱 implemented (Phase 2; first GitHub run recorded in `docs/portfolio-evidence.md`).
+`scripts/plan_guard.py` and `scripts/tf_ci.sh` are implemented and ✅ unit-tested. The AWS-facing workflows are Phase 8. Practices
 reuse Project 2 where they were verified there (pinned SHAs, OIDC subjects with immutable IDs,
 digest-bound apply, typed-confirmation cleanup).
 
@@ -21,6 +22,20 @@ needed, `contents: read`). `concurrency` per environment. `persist-credentials: 
 Third-party actions pinned to full commit SHAs with a version comment. Dependabot updates them.
 Runners: `ubuntu-24.04`. Every SHA is checked against the action's release tag when it is added
 (Phase 8). No SHA is written from memory.
+
+### 1.1 `ci.yml` as implemented (no AWS access)
+
+| Job | Tools (pinned) | Fails on |
+|---|---|---|
+| python | Python 3.13, `requirements-dev.lock` (`--require-hashes`), Ruff 0.17.4, Bandit 1.9.4, pytest 9.2.0 + pytest-cov | lint/format, SAST, catalog, stale generated docs or packaged catalog, unregistered suppressions, tests, coverage < 90 % |
+| terraform | Terraform 1.17.2 | fmt, validate, `terraform test` for 12 modules + bootstrap + stack, environment invariants (dev/staging/prod) |
+| tflint | TFLint v0.55.1 + aws ruleset 0.49.0 | any issue |
+| checkov | Checkov 3.4.3 (`requirements-scan.lock`) | Terraform and GitHub Actions findings |
+| trivy | Trivy v0.76.1 | misconfiguration, secret or vulnerability findings |
+| workflow-security | zizmor 1.32.0, actionlint 1.7.12 | workflow security findings |
+
+Pins are the newest releases at least 14 days old (supply-chain cooldown). Dependabot updates
+actions, pip and Terraform providers weekly with the same 14-day cooldown.
 
 ## 2. Identity (OIDC)
 

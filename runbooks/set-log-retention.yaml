@@ -1,0 +1,114 @@
+# SSM Automation document: acscg-SetLogRetention (SEC-014). Mode 2; the gatekeeper requires
+# approval when existing data is older than the target (setting retention would delete it).
+schemaVersion: "0.3"
+description: Set a retention period on an allowlisted log group that currently never expires.
+assumeRole: "{{ AutomationAssumeRole }}"
+parameters:
+  AutomationAssumeRole:
+    type: String
+    allowedPattern: "^arn:aws[a-z-]*:iam::\\d{12}:role/acscg-[a-z]+-rem-logs-exec$"
+  FindingKey:
+    type: String
+    allowedPattern: "^[0-9a-f]{64}$"
+  RequestId:
+    type: String
+    allowedPattern: "^[0-9a-f]{32}$|^req-[0-9]+$"
+  RequireApproval:
+    type: String
+    allowedValues: ["true", "false"]
+    default: "false"
+  Approvers:
+    type: StringList
+  LogGroupName:
+    type: String
+    allowedPattern: "^[\\.\\-_/#A-Za-z0-9]{1,512}$"
+  RetentionInDays:
+    type: String
+    allowedValues: ["30", "90", "365"]
+mainSteps:
+  - name: AssertAndCapture
+    action: aws:executeScript
+    onFailure: Abort
+    inputs:
+      Runtime: python3.11
+      Handler: handler
+      InputPayload:
+        Name: "{{ LogGroupName }}"
+      Script: |-
+        import boto3
+
+        def handler(events, context):
+            groups = boto3.client("logs").describe_log_groups(logGroupNamePrefix=events["Name"])["logGroups"]
+            group = next((g for g in groups if g["logGroupName"] == events["Name"]), None)
+            if group is None:
+                raise ValueError("log group not found")
+            if "retentionInDays" in group:
+                raise ValueError("retention already set; this runbook never changes an existing retention")
+            return {"NeverExpired": True}
+  - name: ApprovalRequired
+    action: aws:branch
+    inputs:
+      Choices:
+        - NextStep: Approve
+          Variable: "{{ RequireApproval }}"
+          StringEquals: "true"
+      Default: SetRetention
+  - name: Approve
+    action: aws:approve
+    timeoutSeconds: 14400
+    onFailure: Abort
+    inputs:
+      Approvers: "{{ Approvers }}"
+      MinRequiredApprovals: 1
+      Message: "ACSCG finding {{ FindingKey }}: set {{ RetentionInDays }}-day retention on {{ LogGroupName }}. Events older than that will be deleted."
+    nextStep: SetRetention
+  - name: SetRetention
+    action: aws:executeAwsApi
+    onFailure: Abort
+    inputs:
+      Service: logs
+      Api: PutRetentionPolicy
+      logGroupName: "{{ LogGroupName }}"
+      retentionInDays: "{{ RetentionInDays }}"
+  - name: Reevaluate
+    action: aws:executeAwsApi
+    onFailure: Continue
+    inputs:
+      Service: config
+      Api: StartConfigRulesEvaluation
+      ConfigRuleNames:
+        - acscg-sec014-log-retention
+  - name: Verify
+    action: aws:executeScript
+    onFailure: step:Rollback
+    inputs:
+      Runtime: python3.11
+      Handler: handler
+      InputPayload:
+        Name: "{{ LogGroupName }}"
+        Days: "{{ RetentionInDays }}"
+      Script: |-
+        import boto3
+
+        def handler(events, context):
+            groups = boto3.client("logs").describe_log_groups(logGroupNamePrefix=events["Name"])["logGroups"]
+            group = next(g for g in groups if g["logGroupName"] == events["Name"])
+            if str(group.get("retentionInDays")) != str(events["Days"]):
+                raise ValueError("retention not applied")
+            return {"Verified": True}
+    isEnd: true
+  - name: Rollback
+    action: aws:executeScript
+    onFailure: Abort
+    inputs:
+      Runtime: python3.11
+      Handler: handler
+      InputPayload:
+        Name: "{{ LogGroupName }}"
+      Script: |-
+        import boto3
+
+        def handler(events, context):
+            boto3.client("logs").delete_retention_policy(logGroupName=events["Name"])
+            raise RuntimeError("verification failed; retention removed (expired data cannot be restored)")
+    isEnd: true

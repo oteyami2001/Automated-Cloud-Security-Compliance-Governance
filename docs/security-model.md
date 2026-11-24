@@ -1,7 +1,7 @@
 # Security model: IAM and remediation authorization
 
-**Status: 📝 planned (Phase 1 design).** Policies are written as intent here. They become
-Terraform and policy tests in Phases 2–3 and are verified in AWS in Phase 3+.
+**Status: 🧱 implemented and ✅ tested offline (Phase 2):** `terraform/bootstrap/{ci_roles,boundary}.tf`,
+`terraform/modules/remediation`, `src/acscg/remediation_engine`. Verified in AWS from Phase 3.
 
 ## 1. Identities
 
@@ -24,13 +24,21 @@ No IAM users or access keys are created. The OIDC provider is looked up, not man
 
 ## 2. Permissions boundary `acscg-workload-boundary`
 
+As implemented: writes to data services (S3, DynamoDB, SQS, SNS, Logs, SSM parameters, Lambda
+invoke) are allowed **only on `acscg-*` resources**. KMS use only on keys tagged `Project=acscg`.
+Metadata reads and the scoped remediation actions are allowed on `*` because the role policies
+narrow them to exact ARNs (tested). CI roles (`<env>-plan/apply/cleanup`, `report`) do not carry
+this boundary. Their own policies contain the same explicit denies (other projects, shared OIDC
+provider, foreign trails, organization changes, approvals), and the apply role can create roles
+**only** with this boundary attached.
+
 Attached to every role the project creates (the apply role may create roles only with
 `iam:PermissionsBoundary = acscg-workload-boundary`). It allows the union of the project's needs
 and **explicitly denies**:
 
 | Denied | Why |
 |---|---|
-| `iam:*` except `iam:PassRole` on `acscg-*` execution roles (workload roles), and IAM writes on `aiops-*`, `idp-*` and the OIDC provider (all roles) | Never modify IAM administrator permissions or other projects |
+| All IAM writes (`iam:Create*`, `Put*`, `Attach*`, `Update*`, …). `iam:PassRole` outside `role/acscg-*`. IAM reads stay allowed (the Config recorder needs them) | Never modify IAM administrator permissions or other projects |
 | `organizations:*`, `account:*` | Never touch organization policies or account settings |
 | `cloudtrail:StopLogging`, `DeleteTrail`, `UpdateTrail`, `PutEventSelectors` | Existing audit service |
 | `config:StopConfigurationRecorder`, `DeleteConfigurationRecorder`, `DeleteDeliveryChannel`, `PutConfigurationRecorder` (unless `config_ownership_mode = create`, apply role only) | Existing audit service |

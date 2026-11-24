@@ -1,1 +1,1 @@
-📝 Planned (see docs/roadmap.md, Phase 2).
+Terraform tests live next to the code: `terraform/**/tests/*.tftest.hcl` (run with `make terraform`).

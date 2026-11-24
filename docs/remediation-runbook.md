@@ -1,7 +1,7 @@
 # Remediation runbook (operator procedures)
 
-**Status: 📝 planned (Phase 6).** Commands below are the intended operator interface. They do
-nothing until the remediation module is deployed and enabled.
+**Status:** runbooks, gatekeeper and policy are 🧱 implemented and ✅ tested offline (Phase 2). The
+commands below do nothing until the remediation module is deployed (Phase 6) and a window is opened.
 
 ## 1. Default state
 
@@ -10,9 +10,10 @@ Every environment runs in **report-only** mode (`remediation_mode = "report_only
 
 ## 2. Opening a remediation window (dev only)
 
-1. PR changing `terraform/envs/dev/terraform.tfvars`: `remediation_enabled = true`,
-   `remediation_mode = "human_approval"` (or `auto_low_risk`), and the allowlist entries in
-   `policies/remediation/allowlist.dev.yaml` (exact ARNs, control, action, expiry ≤ 7 days).
+1. PR changing `policies/remediation/dev.yaml`: `remediation_enabled: true`,
+   `remediation_mode: human_approval` (or `auto_low_risk`), and allowlist entries (exact ARNs with
+   `${account_id}`, control, action, `expires_at` ≤ 7 days ahead, and tag values in `parameters` for SEC-013).
+   The JSON Schema, `parse_policy` and Terraform preconditions validate it.
 2. Review → merge → `terraform-plan` → review the digest → `terraform-apply` with approval.
 3. Record the window start in `docs/portfolio-evidence.md`.
 4. Close the window the same way (flags back to report-only, allowlist emptied).

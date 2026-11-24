@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ACSCG remediation policy source",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["environment", "remediation_enabled", "remediation_mode", "approval", "limits", "allowlist", "protected_resources"],
+  "properties": {
+    "environment": {"enum": ["dev", "staging", "prod"]},
+    "remediation_enabled": {"type": "boolean"},
+    "remediation_mode": {"enum": ["report_only", "auto_low_risk", "human_approval"]},
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"timeout_minutes": {"type": "integer", "minimum": 1, "maximum": 1440}}
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"max_attempts_per_finding": {"type": "integer", "minimum": 1, "maximum": 3}}
+    },
+    "allowlist": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "control_id", "action", "account", "region", "resource_arn", "expires_at", "reason"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^AL-\\d{3}$"},
+          "control_id": {"enum": ["SEC-001", "SEC-005", "SEC-006", "SEC-008", "SEC-013", "SEC-014"]},
+          "action": {"enum": ["s3:PutBucketPublicAccessBlock", "ec2:RevokeSecurityGroupIngress", "ec2:ModifyInstanceMetadataOptions", "tag:TagResources", "logs:PutRetentionPolicy"]},
+          "account": {"const": "${account_id}"},
+          "region": {"type": "string"},
+          "resource_arn": {"type": "string", "pattern": "^arn:aws[a-z-]*:[a-z0-9-]+:[^*?]+$"},
+          "expires_at": {"type": "string", "format": "date-time"},
+          "reason": {"type": "string", "minLength": 5},
+          "parameters": {"type": "object", "additionalProperties": {"type": "string"}}
+        }
+      }
+    },
+    "protected_resources": {"type": "array", "items": {"type": "string"}}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"environment": {"const": "prod"}}},
+      "then": {"properties": {"remediation_enabled": {"const": false}, "allowlist": {"maxItems": 0}}}
+    },
+    {
+      "if": {"properties": {"environment": {"enum": ["staging", "prod"]}}},
+      "then": {"properties": {"allowlist": {"maxItems": 0}}}
+    }
+  ]
+}

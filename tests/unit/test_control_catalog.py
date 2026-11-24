@@ -50,7 +50,8 @@ def test_default_mode_is_report_only() -> None:
 
 
 def test_nothing_is_claimed_as_verified_in_aws() -> None:
-    assert {c["implementation_status"] for c in load_catalog()["controls"]} == {"planned"}
+    """Phase 2: rules, processing and remediation exist as code; nothing has run in AWS yet."""
+    assert {c["implementation_status"] for c in load_catalog()["controls"]} == {"implemented"}
 
 
 @pytest.mark.parametrize("control_id", ["SEC-005", "SEC-006", "SEC-008"])

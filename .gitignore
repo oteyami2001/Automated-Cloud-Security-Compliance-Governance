@@ -20,8 +20,11 @@ terraform.rc
 secrets.tfvars
 backend.hcl
 terraform/bootstrap/backend.tf
-# Root configurations commit their provider lock file; reusable modules do not.
+# Reusable modules never commit a lock file. Root lock files (bootstrap, stack) are generated from
+# the registry with all platforms in Phase 3 (terraform providers lock); until then CI creates them.
 terraform/modules/**/.terraform.lock.hcl
+terraform/bootstrap/.terraform.lock.hcl
+terraform/stack/.terraform.lock.hcl
 
 # --- Credentials ---
 .env
@@ -50,6 +53,7 @@ htmlcov/
 dist/
 build/
 *.zip
+!tests/fixtures/lambda.zip
 
 # --- Editors / OS ---
 .idea/

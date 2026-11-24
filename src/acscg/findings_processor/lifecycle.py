@@ -1,0 +1,82 @@
+"""Finding lifecycle state machine (diagrams/remediation-flow.mmd)."""
+
+from __future__ import annotations
+
+from acscg.common.models import FindingState as S
+
+
+class InvalidTransitionError(ValueError):
+    pass
+
+
+_RESOLVED = {S.COMPLIANT, S.VERIFIED_RESOLVED, S.RESOLVED_EXTERNALLY}
+_AWAITING_OWNER = {S.REPORTED, S.REJECTED_POLICY, S.REMEDIATION_REJECTED, S.APPROVAL_EXPIRED, S.REMEDIATION_FAILED}
+
+TRANSITIONS: dict[S | None, set[S]] = {
+    None: {S.COMPLIANT, S.OPEN},
+    S.COMPLIANT: {S.OPEN},
+    S.OPEN: {
+        S.SUPPRESSED_EXCEPTION,
+        S.REPORTED,
+        S.REJECTED_POLICY,
+        S.PENDING_APPROVAL,
+        S.REMEDIATING,
+        S.REMEDIATION_FAILED,
+        S.RESOLVED_EXTERNALLY,
+    },
+    S.SUPPRESSED_EXCEPTION: {S.OPEN, S.RESOLVED_EXTERNALLY},
+    S.REPORTED: {S.RESOLVED_EXTERNALLY, S.SUPPRESSED_EXCEPTION},
+    S.REJECTED_POLICY: {
+        S.RESOLVED_EXTERNALLY,
+        S.PENDING_APPROVAL,
+        S.REMEDIATING,
+        S.REMEDIATION_FAILED,
+        S.SUPPRESSED_EXCEPTION,
+    },
+    S.PENDING_APPROVAL: {S.REMEDIATING, S.REMEDIATION_REJECTED, S.APPROVAL_EXPIRED, S.REMEDIATION_FAILED},
+    S.REMEDIATING: {S.VERIFYING, S.REMEDIATION_FAILED},
+    S.VERIFYING: {S.VERIFIED_RESOLVED, S.VERIFICATION_FAILED},
+    S.REMEDIATION_REJECTED: {S.RESOLVED_EXTERNALLY, S.SUPPRESSED_EXCEPTION},
+    S.APPROVAL_EXPIRED: {
+        S.RESOLVED_EXTERNALLY,
+        S.PENDING_APPROVAL,
+        S.REMEDIATING,
+        S.REMEDIATION_FAILED,
+        S.REJECTED_POLICY,
+        S.SUPPRESSED_EXCEPTION,
+    },
+    S.REMEDIATION_FAILED: {
+        S.RESOLVED_EXTERNALLY,
+        S.PENDING_APPROVAL,
+        S.REMEDIATING,
+        S.REJECTED_POLICY,
+        S.SUPPRESSED_EXCEPTION,
+    },
+    S.VERIFICATION_FAILED: {S.RESOLVED_EXTERNALLY, S.SUPPRESSED_EXCEPTION},
+    S.VERIFIED_RESOLVED: {S.OPEN},
+    S.RESOLVED_EXTERNALLY: {S.OPEN},
+}
+
+NOTIFY_STATES = {
+    S.OPEN,
+    S.PENDING_APPROVAL,
+    S.REJECTED_POLICY,
+    S.REMEDIATION_REJECTED,
+    S.APPROVAL_EXPIRED,
+    S.REMEDIATION_FAILED,
+    S.VERIFICATION_FAILED,
+    S.VERIFIED_RESOLVED,
+}
+
+
+def check_transition(current: S | None, new: S) -> None:
+    if new not in TRANSITIONS.get(current, set()):
+        raise InvalidTransitionError(f"{current} -> {new} is not allowed")
+
+
+def is_resolved(state: S | None) -> bool:
+    return state in _RESOLVED
+
+
+def awaiting_owner(state: S | None) -> bool:
+    return state in _AWAITING_OWNER

@@ -1,6 +1,7 @@
 # SSM Automation runbooks
 
-📝 Planned (Phase 2 offline validation, Phase 6 deployment). Every document follows the safety
+🧱 Implemented and ✅ validated offline (Phase 2: `tests/unit/test_runbooks.py` checks structure and executes the
+embedded scripts against fakes). Deployed by `terraform/modules/remediation` in Phase 6. Every document follows the safety
 pattern in `docs/security-model.md` §4: precondition assert → capture before-state → (approve) →
 single scoped change → re-evaluate → verify → rollback on failure.
 

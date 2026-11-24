@@ -26,6 +26,7 @@ retrieved 2026-11-24. The marketing pricing pages were not reachable from the bu
 | CloudWatch | Logs storage | USD 0.03 per GB-month | 2026-11-19 |
 | CloudWatch | Custom metrics | USD 0.30 per metric-month (first 10,000) | 2026-11-19 |
 | CloudWatch | Standard alarm | USD 0.10 per alarm-month | 2026-11-19 |
+| X-Ray | Traces stored / accessed | USD 0.000005 / 0.0000005 per trace (5.00 / 0.50 per million) | 2026-11-08 |
 | CloudWatch | Dashboard | not found in the extract. **Unverified** (commonly cited: 3 free, then USD 3/dashboard-month) | — |
 | KMS | Customer managed key | USD 1 per key-month | 2026-11-08 |
 | KMS | Symmetric requests | USD 0.03 per 10,000 (20,000/month free tier) | 2026-11-08 |
@@ -62,7 +63,7 @@ retrieved 2026-11-24. The marketing pricing pages were not reachable from the bu
 | Config evaluations | (A1 × A4 + A5) × 0.001 / (A2 × A4 + A5 + 50 re-evals) × 0.001 / (A3 × A4 + A5) × 0.001 | 0.55 | 0.45 | 0.13 |
 | KMS (2 keys) | 2 × 1 / 30 | 0.07 | 0.07 | 0.07 |
 | CloudWatch (8 metrics, 4 alarms, logs; dashboard unverified) | (2.40 + 0.40 + 0.03) / 30, + 0.10 if the dashboard is billed | 0.09–0.19 | 0.09–0.19 | 0.09–0.19 |
-| Lambda, DynamoDB, SQS, SNS, S3, SSM | volume-based, < 1,000 events/day | < 0.05 | < 0.05 | < 0.01 |
+| Lambda, DynamoDB (incl. PITR on a table well under 1 MB at USD 0.20/GB-month), SQS, SNS, S3, SSM, X-Ray (< 1,000 traces/day ≈ USD 0.005) | volume-based, < 1,000 events/day | < 0.05 | < 0.05 | < 0.01 |
 | **Total** |  | **≈ 1.20–1.30** | **≈ 0.95–1.05** | **≈ 0.33–0.43** |
 
 ### Optional integrations (only in an approved window)
