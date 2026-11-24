@@ -12,5 +12,9 @@ object_lock_days       = 7
 point_in_time_recovery = true
 deletion_protection    = false
 allow_synthetic_events = true
-enable_test_fixtures   = true  # Phase 5 step A: isolated, compliant fixtures (scenario 1); violation flags stay off
+enable_test_fixtures   = true # Phase 5: isolated fixtures (VPC without IGW or subnets, unattached SGs, empty private bucket)
+# Phase 5 step B: deliberate, isolated violations for validation scenarios 2-4. Turn off again after the evidence is recorded.
+fixture_open_ssh       = true  # scenario 2: 22/tcp from 0.0.0.0/0 on the UNATTACHED fixture SG
+fixture_missing_tags   = true  # scenario 3: extra unattached SG without Owner/ManagedBy/DataClassification
+fixture_bucket_bpa_gap = true  # scenario 4: BlockPublicPolicy off on the EMPTY bucket (ACLs disabled, Deny-only policy)
 enable_remediation     = false # Phase 6
