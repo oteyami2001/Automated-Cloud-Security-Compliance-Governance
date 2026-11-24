@@ -112,9 +112,10 @@ module "security_config" {
   permissions_boundary_arn      = local.boundary_arn
   min_log_retention_days        = var.log_retention_days
   force_destroy_delivery_bucket = var.environment == "dev"
-
-  # Rules publish their first results at creation. Route events first so none are lost (P4-13).
-  depends_on = [module.eventbridge]
+  # No module-level depends_on: it defers every data source in the module to apply time, which
+  # made the recorder role, its policy and the AWS_ConfigRole attachment show as changes (and the
+  # attachment as a replacement) in plan run 45437992486. Results published before the event
+  # routing exists are recovered by the findings-reconciler instead (P4-13, P5-1).
 }
 
 module "security_hub" {
