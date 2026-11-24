@@ -97,6 +97,10 @@ run "periodic_rules_have_no_scope_and_retention_has_custom_check" {
     error_message = "the security group checks stay change-triggered"
   }
   assert {
+    condition     = jsondecode(aws_config_config_rule.custom["sec013-tags-custom"].input_parameters).requiredTags == "Project,Environment,Owner,ManagedBy,DataClassification"
+    error_message = "the custom tag rule checks the same five keys as REQUIRED_TAGS"
+  }
+  assert {
     condition     = !contains(one(aws_config_config_rule.managed["sec013-required-tags"].scope).compliance_resource_types, "AWS::Lambda::Function")
     error_message = "REQUIRED_TAGS does not support Lambda functions"
   }

@@ -38,6 +38,18 @@ SUCCESS_STATUSES = {"Success", "CompletedWithSuccess"}
 FAILURE_STATUSES = {"Failed", "Cancelled", "TimedOut", "Rejected", "CompletedWithFailure", "Exited"}
 
 
+def aggregate_compliance(results: dict[str, dict[str, Any]]) -> Compliance:
+    """Worst result wins: any NON_COMPLIANT rule makes the control non-compliant for the resource."""
+    values = {Compliance(str(r.get("compliance") or Compliance.INSUFFICIENT_DATA)) for r in results.values()}
+    if Compliance.NON_COMPLIANT in values:
+        return Compliance.NON_COMPLIANT
+    if Compliance.COMPLIANT in values:
+        return Compliance.COMPLIANT
+    if values == {Compliance.NOT_APPLICABLE}:
+        return Compliance.NOT_APPLICABLE
+    return Compliance.INSUFFICIENT_DATA
+
+
 @dataclass
 class Outcome:
     processed: int = 0
@@ -113,12 +125,13 @@ class Processor:
         version = current["version"] if current else None
         state = S(current["state"]) if current else None
         item = self._merge(current, finding, ownership)
+        compliance = self._aggregate(item, current, finding)
 
-        if finding.compliance in {Compliance.INSUFFICIENT_DATA}:
+        if compliance in {Compliance.INSUFFICIENT_DATA}:
             self.recorder.save(item, version, [])
             return
 
-        if finding.compliance in {Compliance.COMPLIANT, Compliance.NOT_APPLICABLE}:
+        if compliance in {Compliance.COMPLIANT, Compliance.NOT_APPLICABLE}:
             if state is None:
                 self.recorder.save(item, version, [(None, S.COMPLIANT, "first evaluation compliant")])
             elif state == S.VERIFYING:
@@ -147,6 +160,36 @@ class Processor:
         if (reached_open or retry) and self._remediation_candidate(item, finding, policy, ownership)[0]:
             self.requester.request(finding.key)
             log_event(LOG, "remediation requested", finding_key=finding.key, control_id=finding.control_id)
+
+    @staticmethod
+    def _aggregate(item: dict[str, Any], current: dict[str, Any] | None, finding: Finding) -> Compliance:
+        """One finding per control and resource, several rules per control (e.g. four for SEC-001).
+
+        Each rule's latest result is kept; the finding is NON_COMPLIANT while any rule says so, and
+        resolves only when every rule that reported is compliant. Without this, the last rule to
+        report decided alone and a compliant result from one rule could close a violation another
+        rule still sees (found in AWS during Phase 5, evidence P5-10).
+        """
+        rules = dict((current or {}).get("rule_results") or {})
+        if current and not rules:  # finding stored before per-rule tracking: keep what it knew
+            legacy = str((current.get("details") or {}).get("rule") or current.get("source") or "unknown")
+            rules[legacy] = {"compliance": current.get("compliance"), "annotation": current.get("annotation", "")}
+        rule = str(finding.details.get("rule") or finding.source)
+        rules[rule] = {
+            "compliance": str(finding.compliance),
+            "annotation": finding.annotation,
+            "observed_at": finding.observed_at,
+        }
+        effective = aggregate_compliance(rules)
+        item["rule_results"] = rules
+        item["compliance"] = str(effective)
+        notes = [
+            f"{r}: {v['annotation']}"
+            for r, v in sorted(rules.items())
+            if v.get("annotation") and v.get("compliance") == str(effective)
+        ]
+        item["annotation"] = "; ".join(notes)[:512] if notes else finding.annotation
+        return effective
 
     def _merge(self, current: dict[str, Any] | None, finding: Finding, ownership: Ownership) -> dict[str, Any]:
         item = dict(current or {})
