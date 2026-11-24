@@ -78,3 +78,22 @@ def test_missing_environment_secrets_fail_fast(name: str) -> None:
     check = names.index("Environment secrets present")
     login = next(i for i, n in enumerate(names) if n.startswith("aws-actions/configure-aws-credentials@"))
     assert check < login
+
+
+def test_tf_ci_redaction_removes_ids_emails_and_auth_blobs() -> None:
+    import shutil
+    import subprocess
+
+    script = (ROOT / "scripts" / "tf_ci.sh").read_text("utf-8")
+    start = script.index("redact() {")
+    func = script[start : script.index("\n}\n", start) + 3]
+    sample = (
+        "not authorized on resource: arn:aws:ec2:us-east-2:111122223333:vpc/vpc-0223b576a747a4747 "
+        "sg-0123456789abcdef0 owner@example.com Encoded authorization failure message: l21_e11Ma9B7z-x\n"
+    )
+    bash = shutil.which("bash") or "/bin/bash"
+    cmd = [bash, "-c", func + "redact"]
+    out = subprocess.run(cmd, input=sample, capture_output=True, text=True, check=True).stdout  # noqa: S603 - fixed bash running this repository's own redact function
+    assert "111122223333" not in out and "vpc-0223b576a747a4747" not in out and "sg-0123456789abcdef0" not in out
+    assert "owner@example.com" not in out and "l21_e11Ma9B7z" not in out
+    assert "vpc-<id>" in out and "<removed>" in out

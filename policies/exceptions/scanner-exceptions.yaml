@@ -323,6 +323,12 @@ suppressions:
   review_by: '2027-05-01'
 - tool: ruff
   rule: S603
+  path: tests/unit/test_phase4_workflows.py
+  justification: fixed bash running this repository's own redact function
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: ruff
+  rule: S603
   path: tests/security/test_plan_guard.py
   justification: runs this repository's own script with fixed arguments
   owner: oteyami2001

@@ -90,6 +90,9 @@ locals {
     },
     { Sid = "IamRead", Effect = "Allow", Action = ["iam:GetPolicy", "iam:GetPolicyVersion", "iam:GetOpenIDConnectProvider", "iam:ListOpenIDConnectProviders"], Resource = "*" },
     { Sid = "FixtureNetwork", Effect = "Allow", Action = ["ec2:CreateVpc", "ec2:CreateSecurityGroup", "ec2:CreateTags"], Resource = "*", Condition = { StringEquals = { "aws:RequestTag/Project" = "acscg" } } },
+    # CreateSecurityGroup is also authorised against the VPC it is created in, and that resource
+    # carries no request tags. Allow it only for VPCs that are themselves tagged Project=acscg.
+    { Sid = "FixtureSecurityGroupInProjectVpc", Effect = "Allow", Action = "ec2:CreateSecurityGroup", Resource = "${local.arn}:ec2:${local.r}:${local.a}:vpc/*", Condition = { StringEquals = { "aws:ResourceTag/Project" = "acscg" } } },
     { Sid = "FixtureNetworkManage", Effect = "Allow", Action = ["ec2:DeleteVpc", "ec2:DeleteSecurityGroup", "ec2:AuthorizeSecurityGroupIngress", "ec2:RevokeSecurityGroupIngress", "ec2:AuthorizeSecurityGroupEgress", "ec2:RevokeSecurityGroupEgress", "ec2:ModifySecurityGroupRules", "ec2:ModifyVpcAttribute", "ec2:DeleteTags"], Resource = "*", Condition = { StringEquals = { "aws:ResourceTag/Project" = "acscg" } } },
     { Sid = "Ec2Read", Effect = "Allow", Action = ["ec2:Describe*"], Resource = "*" },
     # Security Hub, GuardDuty and Access Analyzer are not granted: an SCP denies them in the target
