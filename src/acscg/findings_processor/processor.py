@@ -33,7 +33,9 @@ from acscg.remediation_engine.policy import PlatformPolicy
 LOG = get_logger("acscg.findings_processor")
 MAX_CONFLICT_RETRIES = 3
 S = FindingState
-RETRYABLE_STATES = {S.REJECTED_POLICY, S.APPROVAL_EXPIRED, S.REMEDIATION_FAILED}
+# OPEN with no transition means the gatekeeper never recorded a decision (e.g. it crashed); asking
+# again is safe because the gatekeeper's per-finding lock refuses a second concurrent request.
+RETRYABLE_STATES = {S.OPEN, S.REJECTED_POLICY, S.APPROVAL_EXPIRED, S.REMEDIATION_FAILED}
 SUCCESS_STATUSES = {"Success", "CompletedWithSuccess"}
 FAILURE_STATUSES = {"Failed", "Cancelled", "TimedOut", "Rejected", "CompletedWithFailure", "Exited"}
 

@@ -96,7 +96,10 @@ def test_repeated_noncompliant_evaluation_updates_without_notifying(harness: Har
     harness.processor.process(config_event())
     harness.processor.process(config_event())  # new event id, same violation
     assert len(harness.notifier.sent) == 1
-    assert harness.requester.requested == [SG_KEY]
+    # The fake requester records no decision, so the finding is still OPEN: a later evaluation asks the
+    # gatekeeper again (its per-finding lock refuses a concurrent duplicate). In AWS a gatekeeper crash
+    # left a finding OPEN with nothing to retry it (evidence P6-6).
+    assert harness.requester.requested == [SG_KEY, SG_KEY]
     assert harness.finding(SG_KEY)["version"] == 2
 
 

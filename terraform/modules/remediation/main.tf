@@ -24,6 +24,8 @@ locals {
   }
 
   definitions = [for rb in values(local.runbooks) : "${local.arn}:ssm:${var.region}:${var.account_id}:automation-definition/${rb.document}:*"]
+  # SSM authorizes StartAutomationExecution against the document ARN (CloudTrail, evidence P6-6).
+  documents = [for rb in values(local.runbooks) : "${local.arn}:ssm:${var.region}:${var.account_id}:document/${rb.document}"]
 }
 
 # ------------------------------------------------------------------ execution roles
@@ -162,7 +164,7 @@ locals {
       { Sid = "Notify", Effect = "Allow", Action = "sns:Publish", Resource = var.topic_arn },
       { Sid = "DeadLetter", Effect = "Allow", Action = "sqs:SendMessage", Resource = var.dlq_arn },
       { Sid = "PolicyRead", Effect = "Allow", Action = "ssm:GetParameter", Resource = var.policy_parameter_arn },
-      { Sid = "StartProjectRunbooksOnly", Effect = "Allow", Action = "ssm:StartAutomationExecution", Resource = concat(local.definitions, ["${local.arn}:ssm:${var.region}:${var.account_id}:automation-execution/*"]) },
+      { Sid = "StartProjectRunbooksOnly", Effect = "Allow", Action = "ssm:StartAutomationExecution", Resource = concat(local.documents, local.definitions, ["${local.arn}:ssm:${var.region}:${var.account_id}:automation-execution/*"]) },
       { Sid = "TagExecutions", Effect = "Allow", Action = "ssm:AddTagsToResource", Resource = "${local.arn}:ssm:${var.region}:${var.account_id}:automation-execution/*" },
       {
         Sid       = "PassOnlyRunbookRoles"

@@ -54,6 +54,25 @@ class Gatekeeper:
         if not lock_available:
             log_event(LOG, "remediation already active", finding_key=finding_key)
             return {"allowed": False, "reasons": ["another remediation for this finding is active"]}
+        started = False
+        try:
+            result = self._decide_and_start(finding, finding_key, request_id, policy, control)
+            started = bool(result.get("started"))
+            return result
+        finally:
+            # The lock is held only while an execution runs; any error before that releases it,
+            # otherwise the finding stays blocked for the lock TTL (found in AWS, evidence P6-6).
+            if not started:
+                self.store.release_lock(finding_key, request_id)
+
+    def _decide_and_start(
+        self,
+        finding: dict[str, Any],
+        finding_key: str,
+        request_id: str,
+        policy: PlatformPolicy | None,
+        control: Any,
+    ) -> dict[str, Any]:
         attempts = sum(1 for r in self.store.remediations(finding_key) if r.get("execution_id"))
         live = self.live_check(finding) if policy is not None else None
         decision = decide(
@@ -77,7 +96,6 @@ class Gatekeeper:
         }
         if not decision.allowed:
             self._deny(finding, request, decision)
-            self.store.release_lock(finding_key, request_id)
             return decision.as_dict()
         if policy is None or live is None:  # unreachable: decide() denies without them; fail closed anyway
             raise RuntimeError("authorization facts missing after an allow decision")
@@ -87,13 +105,19 @@ class Gatekeeper:
             request["status"] = "StartFailed"
             request["error"] = type(exc).__name__
             self.store.put_remediation(finding_key, request)
-            self.recorder.save(
-                finding,
-                finding["version"],
-                [(S(finding["state"]), S.REMEDIATION_FAILED, "runbook could not start")],
-                execution=request,
+            state = S(finding["state"])
+            # A retry that fails again stays REMEDIATION_FAILED (a self-transition is not a transition).
+            steps = [] if state == S.REMEDIATION_FAILED else [(state, S.REMEDIATION_FAILED, "runbook could not start")]
+            self.recorder.save(finding, finding["version"], steps, execution=request)
+            log_event(
+                LOG,
+                "runbook could not start",
+                logging.ERROR,
+                finding_key=finding_key,
+                document=decision.action.document if decision.action else None,
+                error=type(exc).__name__,
+                detail=_error_code(exc),
             )
-            self.store.release_lock(finding_key, request_id)
             return {**decision.as_dict(), "started": False}
         request.update(
             {"execution_id": execution_id, "status": "Started", "parameters": _public_parameters(live.parameters)}
@@ -153,6 +177,14 @@ class Gatekeeper:
             Tags=[{"Key": "Project", "Value": "acscg"}, {"Key": "FindingKey", "Value": finding["finding_key"][:64]}],
         )
         return str(response["AutomationExecutionId"])
+
+
+def _error_code(exc: Exception) -> str:
+    """The AWS error code (e.g. AccessDeniedException), never the message, which names the account."""
+    response = getattr(exc, "response", None)
+    if isinstance(response, dict):
+        return str(response.get("Error", {}).get("Code", ""))
+    return ""
 
 
 def client_token(request_id: str) -> str:
