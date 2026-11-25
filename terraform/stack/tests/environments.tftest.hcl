@@ -64,8 +64,8 @@ run "environment_invariants" {
   command = apply
 
   assert {
-    condition     = output.remediation_mode == "report_only" && !output.remediation_enabled
-    error_message = "committed configuration must be report-only (remediation windows are separate, reviewed changes)"
+    condition     = (output.remediation_mode == "report_only" && !output.remediation_enabled) || var.environment == "dev"
+    error_message = "staging and prod are report-only; only dev may open a remediation window (reviewed PR)"
   }
   assert {
     condition     = !output.ownership.security_hub && !output.ownership.guardduty && !output.ownership.cloudtrail

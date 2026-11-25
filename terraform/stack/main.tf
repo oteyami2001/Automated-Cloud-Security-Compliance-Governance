@@ -15,8 +15,9 @@ locals {
   gatekeeper_fn = "${local.arn}:lambda:${var.region}:${var.aws_account_id}:function:${local.gatekeeper}"
 
   policy_source = yamldecode(templatefile("${path.module}/../../policies/remediation/${var.environment}.yaml", {
-    account_id = var.aws_account_id
-    region     = var.region
+    account_id     = var.aws_account_id
+    region         = var.region
+    fixture_sg_arn = try(aws_security_group.fixture[0].arn, "")
   }))
 
   ci_roles = [for s in ["plan", "apply", "cleanup"] : "${local.role_arn}/acscg-github-${var.environment}-${s}"]

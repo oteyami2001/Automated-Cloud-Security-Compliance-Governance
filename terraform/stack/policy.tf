@@ -48,5 +48,22 @@ resource "aws_ssm_parameter" "policy" {
       condition     = alltrue([for e in local.allowlist : e.account == var.aws_account_id && e.region == var.region])
       error_message = "Every allowlist entry must target this deployment's account and Region."
     }
+    precondition {
+      # An unrendered or empty ARN would make the processor (which fails closed) reject the policy.
+      condition     = alltrue([for e in local.allowlist : startswith(e.resource_arn, "arn:")])
+      error_message = "Every allowlist entry must render to a real ARN (are the fixtures enabled?)."
+    }
+    precondition {
+      condition     = var.environment == "dev" || length(local.allowlist) == 0
+      error_message = "Only dev may have an allowlist."
+    }
+    precondition {
+      condition     = alltrue([for e in local.allowlist : contains(local.fixture_arns, e.resource_arn)])
+      error_message = "Remediation windows may target this stack's test fixtures only."
+    }
+    precondition {
+      condition     = alltrue([for e in local.allowlist : timecmp(e.expires_at, timeadd(plantimestamp(), "168h")) <= 0])
+      error_message = "Allowlist entries must expire within 7 days of the plan."
+    }
   }
 }
