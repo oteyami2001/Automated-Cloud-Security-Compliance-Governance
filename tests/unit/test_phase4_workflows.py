@@ -119,4 +119,6 @@ def test_approvers_come_from_an_environment_secret(name: str) -> None:
     (job,) = load(name)["jobs"].values()
     step = job["steps"][-1]
     assert step["env"]["APPROVERS"] == "${{ secrets.APPROVERS }}"
-    assert 'export TF_VAR_approvers="$APPROVERS"' in step["run"]  # only when set: an empty list var would not parse
+    assert (
+        "TF_VAR_approvers=$(python scripts/normalise_approvers.py) || exit 1" in step["run"]
+    )  # validated, only when set
