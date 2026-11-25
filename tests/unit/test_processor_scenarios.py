@@ -380,3 +380,30 @@ def test_aggregate_compliance(values: list[str], expected: str) -> None:
 
     results = {f"rule-{i}": {"compliance": v} for i, v in enumerate(values)}
     assert aggregate_compliance(results) == expected
+
+
+def _at(event: dict, when: str) -> dict:
+    """The same event, observed at another time (every timestamp in it)."""
+    import json as _json
+
+    return _json.loads(_json.dumps(event).replace("2026-11-24T09:00:00", when))
+
+
+def test_stale_noncompliant_result_does_not_fail_verification(harness: Harness) -> None:
+    """Found in AWS (P6-7): Config's pre-remediation result must not decide verification."""
+    _start_remediation(harness, mode="auto_low_risk")
+    harness.verifier.result = None  # no result recorded since the runbook started
+    harness.processor.process(ssm_status_event("exec-1", "Success"))  # ends 09:30
+    harness.processor.process(config_event())  # NON_COMPLIANT, recorded 09:00: the old violation
+    assert harness.finding(SG_KEY)["state"] == "VERIFYING"
+    harness.processor.process(_at(config_event(compliance="COMPLIANT"), "2026-11-24T09:40:00"))
+    assert harness.finding(SG_KEY)["state"] == "VERIFIED_RESOLVED"
+
+
+def test_fresh_noncompliant_result_fails_verification(harness: Harness) -> None:
+    _start_remediation(harness, mode="auto_low_risk")
+    harness.verifier.result = None
+    harness.processor.process(ssm_status_event("exec-1", "Success"))
+    harness.processor.process(_at(config_event(), "2026-11-24T09:45:00"))
+    item = harness.finding(SG_KEY)
+    assert item["state"] == "VERIFICATION_FAILED" and item["escalate"] is True

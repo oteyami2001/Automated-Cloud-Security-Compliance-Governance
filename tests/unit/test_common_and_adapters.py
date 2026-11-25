@@ -294,6 +294,30 @@ def test_config_verifier() -> None:
     assert verify(config_results(("acscg-sec005-a", "INSUFFICIENT_DATA"))) is None
 
 
+def test_config_verifier_ignores_results_recorded_before_the_remediation() -> None:
+    from datetime import UTC, datetime
+
+    finding = {"control_id": "SEC-001", "resource_type": "AWS::S3::Bucket", "resource_id": "b"}
+
+    def result(c: str, hour: int, naive: bool = False) -> dict[str, Any]:
+        when = datetime(2026, 11, 25, hour, 0, tzinfo=None if naive else UTC)
+        return {
+            "EvaluationResultIdentifier": {"EvaluationResultQualifier": {"ConfigRuleName": "acscg-sec001-x"}},
+            "ComplianceType": c,
+            "ResultRecordedTime": when,
+        }
+
+    def verify(*items: dict[str, Any]) -> Compliance | None:
+        client = Recorder({"get_compliance_details_by_resource": {"EvaluationResults": list(items)}})
+        return ConfigVerifier(client).verify(finding, since="2026-11-25T22:00:00Z")
+
+    assert verify(result("NON_COMPLIANT", 21)) is None  # pre-remediation: not a verdict
+    assert verify(result("NON_COMPLIANT", 21), result("COMPLIANT", 23)) == Compliance.COMPLIANT
+    assert verify(result("NON_COMPLIANT", 23, naive=True)) == Compliance.NON_COMPLIANT
+    assert verify({**result("COMPLIANT", 23), "ResultRecordedTime": "2026-11-25T23:00:00Z"}) == Compliance.COMPLIANT
+    assert verify({**result("COMPLIANT", 23), "ResultRecordedTime": None}) is None
+
+
 def test_ssm_policy_provider_caches() -> None:
     ssm = Recorder({"get_parameter": {"Parameter": {"Value": json.dumps(policy_document())}}})
     ticks = iter([0, 10, 100])
