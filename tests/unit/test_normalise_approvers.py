@@ -19,7 +19,18 @@ ROLE = "arn:aws:iam::111122223333:role/AccountFullAccessRole"
 
 @pytest.mark.parametrize(
     "raw",
-    [f'["{ROLE}"]', f'  ["{ROLE}"]\n', f'[ "{ROLE} " ]\r\n', f'["{ROLE}", "arn:aws:iam::111122223333:user/alice"]'],
+    [
+        f'["{ROLE}"]',
+        f'  ["{ROLE}"]\n',
+        f'[ "{ROLE} " ]\r\n',
+        f'["{ROLE}", "arn:aws:iam::111122223333:user/alice"]',
+        ROLE,  # plain ARN, as printed by `aws iam get-role ... --output text`
+        f"{ROLE}\n",
+        f'"{ROLE}"',
+        f"\u201c{ROLE}\u201d",  # smart quotes from a word processor or chat
+        f"\ufeff{ROLE}",  # byte-order mark
+        f"{ROLE}, arn:aws:iam::111122223333:user/alice",
+    ],
 )
 def test_valid_values_are_normalised(raw: str) -> None:
     out = na.normalise(raw)
@@ -32,7 +43,8 @@ def test_valid_values_are_normalised(raw: str) -> None:
         ("", "empty"),
         (f'["{ROLE}"] extra', "not valid JSON"),
         (f"[{ROLE}]", "not valid JSON"),
-        (f'"{ROLE}"', "non-empty JSON list"),
+        (f"APPROVERS={ROLE}", "starts with a letter"),
+        (f"{{{ROLE}}}", "starts with the symbol U\\+007B"),
         ("[]", "non-empty JSON list"),
         ('["arn:aws:iam::111122223333:root"]', "item 1"),
         ('["arn:aws:sts::111122223333:assumed-role/AccountFullAccessRole/session"]', "item 1"),
