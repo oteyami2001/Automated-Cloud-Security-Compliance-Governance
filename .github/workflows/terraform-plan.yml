@@ -59,5 +59,5 @@ jobs:
           TF_IN_AUTOMATION: "1"
           APPROVERS: ${{ secrets.APPROVERS }} # optional JSON list of IAM role/user ARNs (Mode 3 approvers)
         run: |
-          if [ -n "$APPROVERS" ]; then export TF_VAR_approvers="$APPROVERS"; fi
+          if [ -n "$APPROVERS" ]; then TF_VAR_approvers=$(python scripts/normalise_approvers.py) || exit 1; export TF_VAR_approvers; fi
           bash scripts/tf_ci.sh plan dev apply

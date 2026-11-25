@@ -70,5 +70,5 @@ jobs:
           APPROVERS: ${{ secrets.APPROVERS }} # optional JSON list of IAM role/user ARNs (Mode 3 approvers)
           EXPECTED_DIGEST: ${{ inputs.digest }}
         run: |
-          if [ -n "$APPROVERS" ]; then export TF_VAR_approvers="$APPROVERS"; fi
+          if [ -n "$APPROVERS" ]; then TF_VAR_approvers=$(python scripts/normalise_approvers.py) || exit 1; export TF_VAR_approvers; fi
           bash scripts/tf_ci.sh apply dev apply
