@@ -271,15 +271,20 @@ class FakeLogs:
 
 def test_log_retention_scripts_never_change_existing_retention() -> None:
     f = "set-log-retention.yaml"
-    assert run_script(f, "AssertAndCapture", {"Name": "/g"}, {"logs": FakeLogs([{"logGroupName": "/g"}])})[
+    assert run_script(f, "AssertAndCapture", {"Name": "/g", "Days": 30}, {"logs": FakeLogs([{"logGroupName": "/g"}])})[
         "NeverExpired"
     ]
     with pytest.raises(ValueError, match="already set"):
         run_script(
-            f, "AssertAndCapture", {"Name": "/g"}, {"logs": FakeLogs([{"logGroupName": "/g", "retentionInDays": 7}])}
+            f,
+            "AssertAndCapture",
+            {"Name": "/g", "Days": 30},
+            {"logs": FakeLogs([{"logGroupName": "/g", "retentionInDays": 7}])},
         )
     with pytest.raises(ValueError, match="not found"):
-        run_script(f, "AssertAndCapture", {"Name": "/g"}, {"logs": FakeLogs([])})
+        run_script(f, "AssertAndCapture", {"Name": "/g", "Days": 30}, {"logs": FakeLogs([])})
+    with pytest.raises(ValueError, match="30, 90 or 365"):
+        run_script(f, "AssertAndCapture", {"Name": "/g", "Days": 7}, {"logs": FakeLogs([{"logGroupName": "/g"}])})
     assert run_script(
         f, "Verify", {"Name": "/g", "Days": "30"}, {"logs": FakeLogs([{"logGroupName": "/g", "retentionInDays": 30}])}
     )
@@ -316,3 +321,35 @@ def test_list_parameters_are_never_embedded_in_a_longer_string(filename: str) ->
             ref = "{{ " + name + " }}"
             if ref in text:
                 assert text.strip() == ref, f"{filename}: {name} used inside {text[:80]!r}"
+
+
+BOTO_TYPES = {"integer": "Integer", "long": "Integer", "boolean": "Boolean", "string": "String", "list": "StringList"}
+
+
+@pytest.mark.parametrize("filename", sorted(RUNBOOK_FILES.values()))
+def test_api_inputs_match_the_aws_api_types(filename: str) -> None:
+    """Every "{{ Param }}" passed whole to an aws:executeAwsApi input has the type the API expects.
+
+    Found in AWS (P6-8): a String RetentionInDays reached PutRetentionPolicy as "30" and was rejected.
+    """
+    import re
+
+    import botocore.session
+
+    session = botocore.session.get_session()
+    doc = load(filename)
+    for step in doc["mainSteps"]:
+        if step["action"] != "aws:executeAwsApi":
+            continue
+        inputs = step["inputs"]
+        model = session.get_service_model(inputs["Service"]).operation_model(inputs["Api"]).input_shape
+        for key, value in inputs.items():
+            if key in {"Service", "Api"}:
+                continue
+            assert key in model.members, f"{filename}:{step['name']}: {key} is not an input of {inputs['Api']}"
+            match = re.fullmatch(r"\{\{ *(\w+) *\}\}", str(value)) if isinstance(value, str) else None
+            if not match:
+                continue
+            expected = BOTO_TYPES.get(model.members[key].type_name)
+            declared = doc["parameters"][match.group(1)]["type"]
+            assert declared == expected, f"{filename}:{step['name']}: {key} needs {expected}, parameter is {declared}"

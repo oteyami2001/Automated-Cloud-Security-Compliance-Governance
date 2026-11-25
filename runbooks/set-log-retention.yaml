@@ -23,8 +23,9 @@ parameters:
     type: String
     allowedPattern: "^[\\.\\-_/#A-Za-z0-9]{1,512}$"
   RetentionInDays:
-    type: String
-    allowedValues: ["30", "90", "365"]
+    # Integer: PutRetentionPolicy rejects a string ("Invalid type for parameter retentionInDays",
+    # found in AWS, evidence P6-8). AssertAndCapture enforces the 30/90/365 values.
+    type: Integer
 mainSteps:
   - name: AssertAndCapture
     action: aws:executeScript
@@ -34,10 +35,13 @@ mainSteps:
       Handler: handler
       InputPayload:
         Name: "{{ LogGroupName }}"
+        Days: "{{ RetentionInDays }}"
       Script: |-
         import boto3
 
         def handler(events, context):
+            if int(events["Days"]) not in (30, 90, 365):
+                raise ValueError("retention must be 30, 90 or 365 days")
             groups = boto3.client("logs").describe_log_groups(logGroupNamePrefix=events["Name"])["logGroups"]
             group = next((g for g in groups if g["logGroupName"] == events["Name"]), None)
             if group is None:
