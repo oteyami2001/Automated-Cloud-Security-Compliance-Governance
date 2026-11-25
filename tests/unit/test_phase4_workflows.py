@@ -98,3 +98,16 @@ def test_tf_ci_redaction_removes_ids_emails_and_auth_blobs() -> None:
     assert "111122223333" not in out and "vpc-0223b576a747a4747" not in out and "sg-0123456789abcdef0" not in out
     assert "owner@example.com" not in out and "l21_e11Ma9B7z" not in out and "7dQHrrpwzSEz" not in out
     assert "vpc-<id>" in out and "<removed>" in out
+
+
+def test_verify_workflow_is_read_only() -> None:
+    workflow = load("verify-deployment.yml")
+    assert workflow["permissions"] == {}
+    assert True not in workflow or not (workflow[True]["workflow_dispatch"] or {}).get("inputs")
+    (job,) = workflow["jobs"].values()
+    assert job["environment"] == "dev-plan" and job["permissions"] == {"contents": "read", "id-token": "write"}
+    steps = job["steps"]
+    creds = next(s for s in steps if s.get("uses", "").startswith("aws-actions/configure-aws-credentials@"))
+    assert creds["with"]["role-to-assume"].endswith(":role/acscg-github-dev-plan")  # never the apply role
+    assert all(SHA_PIN.match(s["uses"]) for s in steps if "uses" in s)
+    assert all("${{" not in s.get("run", "") for s in steps)

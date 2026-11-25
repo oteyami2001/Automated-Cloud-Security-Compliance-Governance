@@ -212,3 +212,7 @@ aws lambda invoke --function-name acscg-dev-findings-reconciler --cli-read-timeo
 The output counts rules, results and processed findings. Each NON_COMPLIANT resource that becomes a
 finding sends one SNS e-mail.
 
+**Verification without CloudShell.** Actions → `verify-deployment` → Run workflow (branch `main`).
+It uses the read-only plan role and prints one PASS/FAIL line per check (recorder, Lambda errors,
+DLQ, scenarios 2, 3, 4, 6, 12, 13) without account or resource IDs. Exit status fails on any FAIL.
+
