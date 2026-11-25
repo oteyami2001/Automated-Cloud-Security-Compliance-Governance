@@ -123,6 +123,7 @@ All results below were produced in the build environment without AWS credentials
 | ID | Item | Evidence | Status |
 |---|---|---|---|
 | P6-1 | Window design | Step A opens a dev window (auto_low_risk; SEC-005 always Mode 3 by control eligibility) with three allowlist entries, fixtures only, expiring 2026-11-28T00:00Z; deploys the remediation module; turns the fixture violations off so their report-only findings resolve. Step B re-creates them inside the window. New Terraform preconditions: dev-only allowlist, fixture ARNs only, rendered ARNs, expiry ≤ 7 days after the plan. Tests: policy, stack (window without module or fixtures rejected), environments (staging/prod report-only), workflows (approvers from a secret) | ✅ offline |
+| P6-2 | Step A plan and partial apply | Plan run 45695836116 (20:32Z): `21 to add, 10 to change, 2 to destroy` (remediation module; fixture SSH rule and untagged SG removed; bucket BPA restored), digest `885f5204…fd2f96`. Apply run 45696107774 (20:35Z): digest matched; 28 of 33 changes done, then SSM `CreateDocument` refused `acscg-EnforceRequiredTags` and `acscg-RestrictSecurityGroupIngress`: a StringList parameter (`TagKeys`, `SecurityGroupRuleIds`) was embedded in the approval `Message` text. Fixed; new test `test_list_parameters_are_never_embedded_in_a_longer_string` fails on the old runbooks and passes on the fix | ✅ fix, ⏳ re-apply |
 ## Validation scenarios (Phase 9 target)
 
 See `docs/validation-scenarios.md`. Rows are filled in only as each scenario runs.

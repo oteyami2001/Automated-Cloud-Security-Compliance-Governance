@@ -294,3 +294,25 @@ def test_runbook_files_are_documented() -> None:
     for filename in RUNBOOK_FILES.values():
         assert filename in readme
     assert isinstance(Path(ROOT / "runbooks"), Path)
+
+
+def _strings(node: Any) -> list[str]:
+    if isinstance(node, str):
+        return [node]
+    if isinstance(node, dict):
+        return [s for v in node.values() for s in _strings(v)]
+    if isinstance(node, list):
+        return [s for v in node for s in _strings(v)]
+    return []
+
+
+@pytest.mark.parametrize("filename", sorted(RUNBOOK_FILES.values()))
+def test_list_parameters_are_never_embedded_in_a_longer_string(filename: str) -> None:
+    """SSM CreateDocument rejects a StringList/MapList parameter used as a substring (found in AWS, P6-2)."""
+    doc = load(filename)
+    lists = [n for n, p in doc["parameters"].items() if p.get("type") in {"StringList", "MapList"}]
+    for text in _strings(doc["mainSteps"]):
+        for name in lists:
+            ref = "{{ " + name + " }}"
+            if ref in text:
+                assert text.strip() == ref, f"{filename}: {name} used inside {text[:80]!r}"
