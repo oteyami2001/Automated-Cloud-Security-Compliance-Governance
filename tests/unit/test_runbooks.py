@@ -313,9 +313,11 @@ def _strings(node: Any) -> list[str]:
 
 @pytest.mark.parametrize("filename", sorted(RUNBOOK_FILES.values()))
 def test_list_parameters_are_never_embedded_in_a_longer_string(filename: str) -> None:
-    """SSM CreateDocument rejects a StringList/MapList parameter used as a substring (found in AWS, P6-2)."""
+    """SSM rejects a non-String parameter used as a substring (StringList: P6-2; Integer: P6-9, found in AWS)."""
     doc = load(filename)
-    lists = [n for n, p in doc["parameters"].items() if p.get("type") in {"StringList", "MapList"}]
+    lists = [
+        n for n, p in doc["parameters"].items() if p.get("type") in {"StringList", "MapList", "Integer", "Boolean"}
+    ]
     for text in _strings(doc["mainSteps"]):
         for name in lists:
             ref = "{{ " + name + " }}"
