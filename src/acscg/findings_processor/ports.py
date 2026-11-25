@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import json
 import time
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
+from acscg.common.canonical import parse_time
 from acscg.common.models import Compliance
 from acscg.remediation_engine.policy import PlatformPolicy, parse_policy
 
@@ -125,24 +127,30 @@ class SsmInspector:
 
 
 class Verifier(Protocol):
-    def verify(self, finding: dict[str, Any]) -> Compliance | None: ...
+    def verify(self, finding: dict[str, Any], since: str | None = None) -> Compliance | None: ...
 
 
 class StaticVerifier:
     def __init__(self, result: Compliance | None = Compliance.COMPLIANT) -> None:
         self.result = result
 
-    def verify(self, finding: dict[str, Any]) -> Compliance | None:
+    def verify(self, finding: dict[str, Any], since: str | None = None) -> Compliance | None:
         return self.result
 
 
 class ConfigVerifier:
-    """Reads this project's Config rule results for the resource. None = not yet evaluated."""
+    """Reads this project's Config rule results for the resource. None = not yet evaluated.
+
+    ``since`` ignores results recorded before the remediation started: right after a runbook ends,
+    Config still holds the pre-remediation NON_COMPLIANT result, and reading it marked a fixed bucket
+    VERIFICATION_FAILED in AWS (evidence P6-7). Without a fresh result the finding stays VERIFYING
+    until Config's next evaluation event decides it.
+    """
 
     def __init__(self, client: Any) -> None:
         self.client = client
 
-    def verify(self, finding: dict[str, Any]) -> Compliance | None:
+    def verify(self, finding: dict[str, Any], since: str | None = None) -> Compliance | None:
         prefix = "acscg-" + finding["control_id"].lower().replace("-", "")
         results = self.client.get_compliance_details_by_resource(
             ResourceType=finding["resource_type"], ResourceId=finding["resource_id"]
@@ -152,12 +160,24 @@ class ConfigVerifier:
             for r in results
             if r["EvaluationResultIdentifier"]["EvaluationResultQualifier"]["ConfigRuleName"].startswith(prefix)
         ]
+        if since:
+            cutoff = parse_time(since)
+            ours = [r for r in ours if _recorded_after(r.get("ResultRecordedTime"), cutoff)]
         if not ours:
             return None
         types = {r["ComplianceType"] for r in ours}
         if "NON_COMPLIANT" in types:
             return Compliance.NON_COMPLIANT
         return Compliance.COMPLIANT if types <= {"COMPLIANT", "NOT_APPLICABLE"} else None
+
+
+def _recorded_after(value: Any, cutoff: datetime) -> bool:
+    if value is None:
+        return False
+    when = value if isinstance(value, datetime) else parse_time(str(value))
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    return when >= cutoff
 
 
 # ---------------------------------------------------------------- policy

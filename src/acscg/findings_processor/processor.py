@@ -152,6 +152,12 @@ class Processor:
             steps.append((state, S.OPEN, "violation detected"))
         elif state == S.SUPPRESSED_EXCEPTION and not self._exception_active(item):
             steps.append((state, S.OPEN, "exception expired"))
+        elif state == S.VERIFYING and finding.observed_at >= str(item.get("remediated_at") or ""):
+            # A result recorded after the runbook ended: the fix did not hold.
+            item["verified_at"] = finding.observed_at
+            item["escalate"] = True
+            self.recorder.save(item, version, [(state, S.VERIFICATION_FAILED, "still non-compliant after remediation")])
+            return
         if steps:
             routed = self._route(item, finding, policy, ownership)
             if routed:
@@ -294,7 +300,8 @@ class Processor:
             if state == S.PENDING_APPROVAL:
                 steps.append((state, S.REMEDIATING, "approved"))
             steps.append((S.REMEDIATING, S.VERIFYING, "runbook succeeded"))
-            verdict = self.verifier.verify(item)
+            item["remediated_at"] = status.observed_at
+            verdict = self.verifier.verify(item, since=request.get("requested_at"))
             if verdict == Compliance.COMPLIANT:
                 item["verified_at"] = self.clock()
                 item["compliance"] = str(Compliance.COMPLIANT)
