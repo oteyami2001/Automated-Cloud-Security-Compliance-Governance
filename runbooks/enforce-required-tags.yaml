@@ -74,7 +74,8 @@ mainSteps:
     inputs:
       Approvers: "{{ Approvers }}"
       MinRequiredApprovals: 1
-      Message: "ACSCG finding {{ FindingKey }}: add tags {{ TagKeys }} to {{ ResourceArn }}."
+      # SSM rejects a StringList parameter inside a longer string; the keys are in the execution's parameters.
+      Message: "ACSCG finding {{ FindingKey }}: add the missing tags (see the TagKeys parameter of this execution) to {{ ResourceArn }}."
     nextStep: AddTags
   - name: AddTags
     action: aws:executeScript

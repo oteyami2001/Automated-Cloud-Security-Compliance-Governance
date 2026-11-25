@@ -78,7 +78,8 @@ mainSteps:
     inputs:
       Approvers: "{{ Approvers }}"
       MinRequiredApprovals: 1
-      Message: "ACSCG finding {{ FindingKey }}: revoke ingress rules {{ SecurityGroupRuleIds }} on {{ SecurityGroupId }}. Approve only if this is the allowlisted test group."
+      # SSM rejects a StringList parameter inside a longer string; the rule IDs are in the execution's parameters.
+      Message: "ACSCG finding {{ FindingKey }}: revoke the ingress rules in the SecurityGroupRuleIds parameter of this execution on {{ SecurityGroupId }}. Approve only if this is the allowlisted test group."
     nextStep: Revoke
   - name: Revoke
     action: aws:executeAwsApi
