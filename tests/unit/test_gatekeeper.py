@@ -485,3 +485,22 @@ def test_start_failure_logs_the_aws_error_code_only(catalog: Catalog, caplog: py
         handle({"finding_key": "a" * 64}, gk)
     text = " ".join(str(getattr(r, "__dict__", r)) for r in caplog.records)
     assert "AccessDeniedException" in text and "111122223333" not in text
+
+
+def test_attempt_limit_counts_only_the_current_violation(catalog: Catalog) -> None:
+    """Found in AWS (P6-9): attempts from an earlier, verified episode refused a fresh violation."""
+    gk, store = service(catalog)
+    key = "a" * 64
+    finding = store.get_finding(key)
+    store.put_finding({**finding, "first_seen": "2026-11-25T23:30:00Z"}, finding["version"])
+    for n, at in enumerate(["2026-11-25T23:02:06Z", "2026-11-25T23:15:01Z"]):  # previous episode
+        store.put_remediation(key, {"request_id": f"old-{n}", "execution_id": f"e-{n}", "requested_at": at})
+    assert handle({"finding_key": key}, gk)["started"]  # 0 attempts in this episode
+
+    gk2, store2 = service(catalog)
+    finding = store2.get_finding(key)
+    store2.put_finding({**finding, "first_seen": "2026-11-25T23:00:00Z"}, finding["version"])
+    for n, at in enumerate(["2026-11-25T23:02:06Z", "2026-11-25T23:15:01Z"]):  # this episode
+        store2.put_remediation(key, {"request_id": f"cur-{n}", "execution_id": f"e-{n}", "requested_at": at})
+    result = handle({"finding_key": key}, gk2)
+    assert not result["allowed"] and any("attempt limit" in r for r in result["reasons"])

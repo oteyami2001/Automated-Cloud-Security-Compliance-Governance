@@ -73,7 +73,15 @@ class Gatekeeper:
         policy: PlatformPolicy | None,
         control: Any,
     ) -> dict[str, Any]:
-        attempts = sum(1 for r in self.store.remediations(finding_key) if r.get("execution_id"))
+        # Attempts count per violation: a finding that was resolved and opened again starts a new
+        # episode (first_seen is reset on reopening). Counting every attempt ever refused a fresh
+        # violation after a verified fix (found in AWS, evidence P6-9).
+        episode_start = str(finding.get("first_seen") or "")
+        attempts = sum(
+            1
+            for r in self.store.remediations(finding_key)
+            if r.get("execution_id") and str(r.get("requested_at") or "") >= episode_start
+        )
         live = self.live_check(finding) if policy is not None else None
         decision = decide(
             finding=finding,

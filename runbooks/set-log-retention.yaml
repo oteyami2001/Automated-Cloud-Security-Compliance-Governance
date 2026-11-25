@@ -64,7 +64,8 @@ mainSteps:
     inputs:
       Approvers: "{{ Approvers }}"
       MinRequiredApprovals: 1
-      Message: "ACSCG finding {{ FindingKey }}: set {{ RetentionInDays }}-day retention on {{ LogGroupName }}. Events older than that will be deleted."
+      # SSM rejects an Integer parameter inside a longer string; the value is in the execution's parameters.
+      Message: "ACSCG finding {{ FindingKey }}: set the retention in the RetentionInDays parameter of this execution on {{ LogGroupName }}. Events older than that will be deleted."
     nextStep: SetRetention
   - name: SetRetention
     action: aws:executeAwsApi
