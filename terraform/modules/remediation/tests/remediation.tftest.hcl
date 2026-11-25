@@ -106,6 +106,15 @@ run "allowlisted_arns_scope_the_change" {
     condition     = !contains([for s in jsondecode(aws_iam_role_policy.exec["s3"].policy).Statement : s.Sid], "ScopedChangeOnAllowlistedResources")
     error_message = "other execution roles stay read-only"
   }
+  assert {
+    condition = alltrue([for d in ["acscg-RestrictSecurityGroupIngress", "acscg-SetLogRetention", "acscg-EnableBucketPublicAccessBlock"] :
+    contains(one([for s in jsondecode(aws_iam_role_policy.gatekeeper.policy).Statement : s.Resource if s.Sid == "StartProjectRunbooksOnly"]), "arn:aws:ssm:us-east-2:111122223333:document/${d}")])
+    error_message = "SSM authorizes StartAutomationExecution on the document ARN (evidence P6-6)"
+  }
+  assert {
+    condition     = alltrue([for r in one([for s in jsondecode(aws_iam_role_policy.gatekeeper.policy).Statement : s.Resource if s.Sid == "StartProjectRunbooksOnly"]) : can(regex(":(document|automation-definition)/acscg-|:automation-execution/", r))])
+    error_message = "the gatekeeper may start only the project's runbooks"
+  }
 }
 
 run "prod_cannot_enable_remediation" {

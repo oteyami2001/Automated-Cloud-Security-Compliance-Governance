@@ -440,3 +440,48 @@ def test_the_old_32_character_token_is_rejected_by_botocore() -> None:
 
     with pytest.raises(ParamValidationError):
         validate_parameters({"DocumentName": "x", "ClientToken": "0" * 32}, SSM_START.input_shape)
+
+
+def test_repeated_start_failure_stays_failed_and_unlocks(catalog: Catalog) -> None:
+    """Found in AWS (P6-6): a retry of a REMEDIATION_FAILED finding crashed on a self-transition and kept the lock."""
+    gk, store = service(catalog, ssm=FakeSsm(fail=True))
+    ids = iter(["req-1", "req-2"])
+    gk.id_factory = lambda: next(ids)
+    handle({"finding_key": "a" * 64}, gk)
+    assert store.get_finding("a" * 64)["state"] == "REMEDIATION_FAILED"
+    again = handle({"finding_key": "a" * 64}, gk)
+    assert again["started"] is False
+    assert store.get_finding("a" * 64)["state"] == "REMEDIATION_FAILED"
+    assert store.locks == {}
+    assert [r["status"] for r in store.remediations("a" * 64)] == ["StartFailed", "StartFailed"]
+
+
+def test_any_error_before_start_releases_the_lock(catalog: Catalog) -> None:
+    gk, store = service(catalog)
+
+    def broken(_finding: dict[str, Any]) -> LiveCheck:
+        raise RuntimeError("live check crashed")
+
+    gk.live_check = broken
+    with pytest.raises(RuntimeError):
+        handle({"finding_key": "a" * 64}, gk)
+    assert store.locks == {}  # the next request is not blocked for the lock TTL
+
+
+def test_start_failure_logs_the_aws_error_code_only(catalog: Catalog, caplog: pytest.LogCaptureFixture) -> None:
+    class DeniedError(Exception):
+        def __init__(self) -> None:
+            super().__init__("denied")
+            self.response = {
+                "Error": {"Code": "AccessDeniedException", "Message": "arn:aws:sts::111122223333:assumed-role/x"}
+            }
+
+    class DeniedSsm(FakeSsm):
+        def start_automation_execution(self, **kwargs: Any) -> dict[str, Any]:
+            raise DeniedError
+
+    gk, _store = service(catalog, ssm=DeniedSsm())
+    with caplog.at_level("ERROR"):
+        handle({"finding_key": "a" * 64}, gk)
+    text = " ".join(str(getattr(r, "__dict__", r)) for r in caplog.records)
+    assert "AccessDeniedException" in text and "111122223333" not in text
