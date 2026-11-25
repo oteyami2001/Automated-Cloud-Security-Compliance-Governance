@@ -149,10 +149,21 @@ class Gatekeeper:
         response = self.ssm.start_automation_execution(
             DocumentName=decision.action.document,
             Parameters=params,
-            ClientToken=request_id,
+            ClientToken=client_token(request_id),
             Tags=[{"Key": "Project", "Value": "acscg"}, {"Key": "FindingKey", "Value": finding["finding_key"][:64]}],
         )
         return str(response["AutomationExecutionId"])
+
+
+def client_token(request_id: str) -> str:
+    """SSM requires a 36-character UUID; the request ID is 32 hex characters (or a test ID).
+
+    The mapping is deterministic, so a retried start with the same request ID stays idempotent.
+    """
+    try:
+        return str(uuid.UUID(hex=request_id))
+    except ValueError:
+        return str(uuid.uuid5(uuid.NAMESPACE_URL, f"acscg:{request_id}"))
 
 
 def _public_parameters(parameters: dict[str, Any]) -> dict[str, Any]:

@@ -5,7 +5,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+import botocore.session
 import pytest
+from botocore.validate import validate_parameters
 from conftest import (
     ACCOUNT,
     APPLY_ROLE,
@@ -30,7 +32,7 @@ from acscg.findings_processor.store import InMemoryStore
 from acscg.remediation_engine.gatekeeper import LiveCheck, decide
 from acscg.remediation_engine.handler import handle
 from acscg.remediation_engine.policy import PolicyError, parse_policy
-from acscg.remediation_engine.service import Gatekeeper
+from acscg.remediation_engine.service import Gatekeeper, client_token
 
 NOW = datetime(2026, 11, 24, 12, tzinfo=UTC)
 
@@ -268,7 +270,12 @@ def test_policy_parameters_are_parsed() -> None:
 # ------------------------------------------------------------------ service
 
 
+SSM_START = botocore.session.get_session().get_service_model("ssm").operation_model("StartAutomationExecution")
+
+
 class FakeSsm:
+    """Validates every call against the real botocore model, as the AWS client does (P6-5)."""
+
     def __init__(self, fail: bool = False) -> None:
         self.calls: list[dict[str, Any]] = []
         self.fail = fail
@@ -276,6 +283,7 @@ class FakeSsm:
     def start_automation_execution(self, **kwargs: Any) -> dict[str, Any]:
         if self.fail:
             raise RuntimeError("throttled")
+        validate_parameters(kwargs, SSM_START.input_shape)  # raises ParamValidationError like boto3
         self.calls.append(kwargs)
         return {"AutomationExecutionId": f"exec-{len(self.calls)}"}
 
@@ -309,7 +317,7 @@ def test_service_starts_approval_runbook_with_live_parameters(catalog: Catalog) 
     assert call["Parameters"]["SecurityGroupRuleIds"] == ["sgr-1"]
     assert call["Parameters"]["RequireApproval"] == ["true"]
     assert call["Parameters"]["Approvers"] == [APPROVER]
-    assert call["ClientToken"] == "req-1"
+    assert call["ClientToken"] == client_token("req-1")
     assert store.get_finding("a" * 64)["state"] == "PENDING_APPROVAL"
     assert store.locks["a" * 64] == "req-1"  # held until the execution ends
 
@@ -415,3 +423,20 @@ def test_end_to_end_detection_to_request(catalog: Catalog) -> None:
     )
     assert gk.handle(key)["started"]
     assert h.finding(key)["state"] == "PENDING_APPROVAL"
+
+
+def test_client_token_is_a_uuid_ssm_accepts() -> None:
+    hex_id = "0123456789abcdef0123456789abcdef"
+    assert client_token(hex_id) == "01234567-89ab-cdef-0123-456789abcdef"
+    assert client_token("req-1") == client_token("req-1") != client_token("req-2")
+    for rid in (hex_id, "req-1"):
+        validate_parameters(
+            {"DocumentName": "acscg-SetLogRetention", "ClientToken": client_token(rid)}, SSM_START.input_shape
+        )
+
+
+def test_the_old_32_character_token_is_rejected_by_botocore() -> None:
+    from botocore.exceptions import ParamValidationError
+
+    with pytest.raises(ParamValidationError):
+        validate_parameters({"DocumentName": "x", "ClientToken": "0" * 32}, SSM_START.input_shape)
