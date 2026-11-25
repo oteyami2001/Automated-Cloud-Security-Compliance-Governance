@@ -235,7 +235,7 @@ def verify(c: Clients, env: str, region: str, now: datetime | None = None) -> Re
         c.cloudwatch, ("AWS/SNS", "NumberOfNotificationsFailed"), {"TopicName": topic}, hours=SNS_WINDOW_HOURS, now=now
     )
     rep.check(
-        "scenario 12: SNS notifications delivered (24 h)",
+        f"scenario 12: SNS notifications delivered ({SNS_WINDOW_HOURS // 24} days)",
         delivered > 0 and failed == 0,
         f"delivered {delivered:.0f}, failed {failed:.0f}",
     )
