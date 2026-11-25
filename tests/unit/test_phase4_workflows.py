@@ -49,13 +49,14 @@ def test_apply_needs_the_reviewed_digest() -> None:
     (job,) = workflow["jobs"].values()
     apply_step = job["steps"][-1]
     assert apply_step["env"]["EXPECTED_DIGEST"] == "${{ inputs.digest }}"
-    assert apply_step["run"].startswith("bash scripts/tf_ci.sh apply ")
+    assert apply_step["run"].strip().splitlines()[-1].startswith("bash scripts/tf_ci.sh apply ")
 
 
 def test_plan_workflow_has_no_write_path() -> None:
     workflow = load("terraform-plan.yml")
     (job,) = workflow["jobs"].values()
-    assert job["steps"][-1]["run"].split()[:3] == ["bash", "scripts/tf_ci.sh", "plan"]  # read-only role, plan only
+    last = job["steps"][-1]["run"].strip().splitlines()[-1]
+    assert last.split()[:3] == ["bash", "scripts/tf_ci.sh", "plan"]  # read-only role, plan only
 
 
 def test_tf_ci_uses_the_bootstrap_state_backend() -> None:
@@ -111,3 +112,11 @@ def test_verify_workflow_is_read_only() -> None:
     assert creds["with"]["role-to-assume"].endswith(":role/acscg-github-dev-plan")  # never the apply role
     assert all(SHA_PIN.match(s["uses"]) for s in steps if "uses" in s)
     assert all("${{" not in s.get("run", "") for s in steps)
+
+
+@pytest.mark.parametrize("name", ["terraform-plan.yml", "terraform-apply.yml"])
+def test_approvers_come_from_an_environment_secret(name: str) -> None:
+    (job,) = load(name)["jobs"].values()
+    step = job["steps"][-1]
+    assert step["env"]["APPROVERS"] == "${{ secrets.APPROVERS }}"
+    assert 'export TF_VAR_approvers="$APPROVERS"' in step["run"]  # only when set: an empty list var would not parse

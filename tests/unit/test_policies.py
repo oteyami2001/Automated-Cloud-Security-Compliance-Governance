@@ -27,7 +27,7 @@ def source(env: str) -> dict[str, Any]:
 def render(env: str, approvers: list[str]) -> dict[str, Any]:
     """Mirror of the Terraform rendering: substitute ${account_id}/${region} and add computed fields."""
     text = Template((ROOT / "policies" / "remediation" / f"{env}.yaml").read_text("utf-8")).substitute(
-        account_id=ACCOUNT, region=REGION
+        account_id=ACCOUNT, region=REGION, fixture_sg_arn=f"arn:aws:ec2:{REGION}:{ACCOUNT}:security-group/sg-0fixture"
     )
     doc = yaml.safe_load(text)
     doc["approval"]["approvers"] = approvers
@@ -40,9 +40,14 @@ def test_policy_sources_are_valid_and_report_only(env: str) -> None:
     doc = source(env)
     assert list(schema("remediation-policy.schema.json").iter_errors(doc)) == []
     assert doc["environment"] == env
-    assert doc["remediation_enabled"] is False and doc["remediation_mode"] == "report_only"
     policy = parse_policy(render(env, [APPROVER]))
-    assert not policy.remediation_enabled and policy.allowlist == ()
+    if env != "dev":
+        assert doc["remediation_enabled"] is False and doc["remediation_mode"] == "report_only"
+        assert not policy.remediation_enabled and policy.allowlist == ()
+    elif policy.remediation_enabled:  # a dev window: fixtures only, every entry expires
+        assert policy.allowlist
+        for entry in policy.allowlist:
+            assert "fixture" in entry.resource_arn and entry.expires_at, entry
 
 
 def test_schema_forbids_prod_remediation_and_allowlists() -> None:

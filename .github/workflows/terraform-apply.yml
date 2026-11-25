@@ -67,5 +67,8 @@ jobs:
           TF_VAR_aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
           TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
           TF_IN_AUTOMATION: "1"
+          APPROVERS: ${{ secrets.APPROVERS }} # optional JSON list of IAM role/user ARNs (Mode 3 approvers)
           EXPECTED_DIGEST: ${{ inputs.digest }}
-        run: bash scripts/tf_ci.sh apply dev apply
+        run: |
+          if [ -n "$APPROVERS" ]; then export TF_VAR_approvers="$APPROVERS"; fi
+          bash scripts/tf_ci.sh apply dev apply

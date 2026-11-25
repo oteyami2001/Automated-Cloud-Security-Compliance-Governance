@@ -1,7 +1,7 @@
 # Remediation runbook (operator procedures)
 
-**Status:** runbooks, gatekeeper and policy are 🧱 implemented and ✅ tested offline (Phase 2). The
-commands below do nothing until the remediation module is deployed (Phase 6) and a window is opened.
+**Status:** runbooks, gatekeeper and policy are 🧱 implemented and ✅ tested offline (Phase 2). Phase 6
+(approved 2026-11-25) opens the first dev window: fixtures only, entries expire 2026-11-28T00:00Z.
 
 ## 1. Default state
 
@@ -17,6 +17,19 @@ Every environment runs in **report-only** mode (`remediation_mode = "report_only
 2. Review → merge → `terraform-plan` → review the digest → `terraform-apply` with approval.
 3. Record the window start in `docs/portfolio-evidence.md`.
 4. Close the window the same way (flags back to report-only, allowlist emptied).
+
+**Only new violations are remediated.** A finding detected while remediation was off is `REPORTED`
+and stays reported when a window opens: the platform asks for remediation when a finding opens, and
+Config does not resend unchanged results. To exercise a window, the violation must occur again
+inside it (Phase 6: step A turns the fixture violations off, step B turns them on).
+
+**Guards (Terraform preconditions on the policy parameter):** only dev may have an allowlist; every
+allowlist ARN must be one of this stack's fixtures; every entry must render to a real ARN (the
+fixture SG ARN is a template variable, never committed) and expire within 7 days of the plan.
+
+**Approvers** come from the GitHub environment secret `APPROVERS` (in `dev-plan` and `dev`): a JSON
+list of IAM role or user ARNs, e.g. `["arn:aws:iam::<account>:role/<role-name>"]`. The root user can
+never approve. The approver must send the signal (§3) as that identity.
 
 ## 3. Approving or rejecting a Mode 3 request
 

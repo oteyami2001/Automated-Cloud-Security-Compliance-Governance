@@ -13,8 +13,10 @@ point_in_time_recovery = true
 deletion_protection    = false
 allow_synthetic_events = true
 enable_test_fixtures   = true # Phase 5: isolated fixtures (VPC without IGW or subnets, unattached SGs, empty private bucket)
-# Phase 5 step B: deliberate, isolated violations for validation scenarios 2-4. Turn off again after the evidence is recorded.
-fixture_open_ssh       = true  # scenario 2: 22/tcp from 0.0.0.0/0 on the UNATTACHED fixture SG
-fixture_missing_tags   = true  # scenario 3: extra unattached SG without Owner/ManagedBy/DataClassification
-fixture_bucket_bpa_gap = true  # scenario 4: BlockPublicPolicy off on the EMPTY bucket (ACLs disabled, Deny-only policy)
-enable_remediation     = false # Phase 6
+# Phase 6 step A: violations OFF so the report-only findings resolve; step B re-creates them inside the
+# remediation window so they open as new findings (docs/remediation-runbook.md §2).
+fixture_open_ssh             = false # scenario 2/9: 22/tcp from 0.0.0.0/0 on the UNATTACHED fixture SG
+fixture_missing_tags         = false # scenario 3/7a: extra unattached SG without Owner/ManagedBy/DataClassification
+fixture_bucket_bpa_gap       = false # scenario 4/8: BlockPublicPolicy off on the EMPTY bucket (ACLs disabled, Deny-only policy)
+fixture_log_group_violations = false # scenario 8: fixture log group without retention
+enable_remediation           = true  # Phase 6 window (policies/remediation/dev.yaml)

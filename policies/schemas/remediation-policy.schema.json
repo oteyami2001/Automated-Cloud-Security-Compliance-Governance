@@ -30,7 +30,10 @@
           "action": {"enum": ["s3:PutBucketPublicAccessBlock", "ec2:RevokeSecurityGroupIngress", "ec2:ModifyInstanceMetadataOptions", "tag:TagResources", "logs:PutRetentionPolicy"]},
           "account": {"const": "${account_id}"},
           "region": {"type": "string"},
-          "resource_arn": {"type": "string", "pattern": "^arn:aws[a-z-]*:[a-z0-9-]+:[^*?]+$"},
+          "resource_arn": {
+            "description": "An exact ARN, or the fixture SG placeholder Terraform renders (a precondition checks the result)",
+            "anyOf": [{"type": "string", "pattern": "^arn:aws[a-z-]*:[a-z0-9-]+:[^*?]+$"}, {"const": "${fixture_sg_arn}"}]
+          },
           "expires_at": {"type": "string", "format": "date-time"},
           "reason": {"type": "string", "minLength": 5},
           "parameters": {"type": "object", "additionalProperties": {"type": "string"}}

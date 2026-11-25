@@ -60,14 +60,21 @@ variables {
   approvers              = ["arn:aws:iam::111122223333:role/security-approver"]
   allow_synthetic_events = true
   enable_test_fixtures   = true
+  enable_remediation     = true # the committed dev policy has a Phase 6 window open
 }
 
-run "dev_is_report_only_and_owns_nothing_account_wide" {
+run "dev_window_targets_fixtures_only_and_owns_nothing_account_wide" {
   command = apply
 
   assert {
-    condition     = output.remediation_mode == "report_only" && !output.remediation_enabled
-    error_message = "every environment starts in report-only mode (ADR 0006)"
+    condition = output.remediation_mode == "report_only" || alltrue([
+      for e in jsondecode(aws_ssm_parameter.policy.value).allowlist : contains(output.fixture_arns, e.resource_arn)
+    ])
+    error_message = "a dev remediation window may target the test fixtures only"
+  }
+  assert {
+    condition     = contains(output.fixture_arns, [for e in jsondecode(aws_ssm_parameter.policy.value).allowlist : e.resource_arn if e.id == "AL-001"][0])
+    error_message = "the fixture SG ARN is rendered into the allowlist (never committed)"
   }
   assert {
     condition     = !output.ownership.config_recorder && !output.ownership.security_hub && !output.ownership.guardduty && !output.ownership.cloudtrail
@@ -82,8 +89,8 @@ run "dev_is_report_only_and_owns_nothing_account_wide" {
     error_message = "synthetic events only in dev; GuardDuty rule only when enabled"
   }
   assert {
-    condition     = length(module.remediation) == 0 && length(output.runbook_documents) == 0 && !contains(keys(output.function_names), "remediation-gatekeeper")
-    error_message = "the remediation module is not deployed until Phase 6 (enable_remediation)"
+    condition     = length(module.remediation) == 1 && length(output.runbook_documents) == 5 && contains(keys(output.function_names), "remediation-gatekeeper")
+    error_message = "the remediation module is deployed while a window is open (enable_remediation)"
   }
   assert {
     condition     = aws_ssm_parameter.policy.type == "SecureString" && aws_ssm_parameter.policy.name == "/acscg/dev/platform-policy"
@@ -168,12 +175,29 @@ run "scenario_fixtures_can_be_enabled" {
   }
 }
 
+run "dev_window_without_the_module_is_rejected" {
+  command = plan
+  variables {
+    enable_remediation = false
+  }
+  expect_failures = [aws_ssm_parameter.policy]
+}
+
+run "dev_window_without_fixtures_is_rejected" {
+  command = plan
+  variables {
+    enable_test_fixtures = false
+  }
+  expect_failures = [aws_ssm_parameter.policy]
+}
+
 run "prod_reference" {
   command = apply
   variables {
     environment            = "prod"
     allow_synthetic_events = false
     enable_test_fixtures   = false
+    enable_remediation     = false
     log_retention_days     = 365
     object_lock_days       = 365
     point_in_time_recovery = true
