@@ -13,11 +13,10 @@ point_in_time_recovery = true
 deletion_protection    = false
 allow_synthetic_events = true
 enable_test_fixtures   = true # Phase 5: isolated fixtures (VPC without IGW or subnets, unattached SGs, empty private bucket)
-# Phase 6 step B: violations re-created INSIDE the remediation window, so they open as new findings
-# (docs/remediation-runbook.md §2). Expected: log group and bucket fixed automatically (Mode 2), SSH
-# rule waits for the owner's approval (Mode 3), untagged SG rejected (not allowlisted, scenario 7a).
-fixture_open_ssh             = true # scenario 9/11: 22/tcp from 0.0.0.0/0 on the UNATTACHED fixture SG (on again: step B retry, part 2)
-fixture_missing_tags         = true # scenario 7a: unattached SG without Owner/ManagedBy/DataClassification, NOT allowlisted
-fixture_bucket_bpa_gap       = true # scenario 8: BlockPublicPolicy off on the EMPTY bucket (on again: step B retry, part 2)
-fixture_log_group_violations = true # scenario 8: fixture log group without retention (on again: fresh violation for the fixed runbook, P6-10)
-enable_remediation           = true # Phase 6 window (policies/remediation/dev.yaml)
+# Phase 6 closed (step D, 2026-11-26): fixture violations off, remediation module removed. The fixtures
+# themselves stay (unattached, no cost) for later phases.
+fixture_open_ssh             = false
+fixture_missing_tags         = false
+fixture_bucket_bpa_gap       = false
+fixture_log_group_violations = false
+enable_remediation           = false
