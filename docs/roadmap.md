@@ -15,7 +15,7 @@ AWS-changing steps (marked ☁️) additionally need approval of the specific pl
 | **7** Reporting ☁️ (2026-11-26; scenario 14 verified in AWS) | Posture visibility | report-generator, `compliance-report.yml`, dashboard, metrics | Scenario 14 ☁️. Metrics match DynamoDB counts | ☁️ |
 | **8** DevSecOps and governance ☁️ (2026-11-26; scenarios 5 and 15 verified, GitHub settings verified from the API) | Enforced pipeline | All workflows, rulesets/environments configured **and verified**, exceptions register, drift detection, cleanup workflow | Scenario 5 (GitHub) and 15. `verify_github_settings.sh` passes | ☁️ (drift drill) |
 | **9** Live validation and cleanup ☁️ (2026-11-26; 16/17 scenarios verified, 16 offline by SCP; verified cleanup, 113 destroyed) | Full lifecycle proof | All 17 scenarios with evidence. Optional services window (16). Cost review. Verified cleanup (17) | Evidence table complete. Cleanup verified. Pre-existing services unchanged | ☁️ incl. destroy |
-| **10** Portfolio | Recruiter-ready | README, technical report, evidence links, demo script, interview notes | Owner review | None |
+| **10** Portfolio ✅ (2026-11-26) | Recruiter-ready | README, technical report, evidence links, demo script, interview notes | Owner review | None |
 
 ## Phase 2 task list (completed: see `docs/portfolio-evidence.md` P2-1…P2-11)
 
