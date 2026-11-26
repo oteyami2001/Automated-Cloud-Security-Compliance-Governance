@@ -219,6 +219,12 @@ bootstrap layer stays (cents per month) so the platform can be rebuilt in two st
 (Object Lock, no force destroy) and the cleanup role could not remove the Config recorder; the
 `dev-cleanup` environment had no secrets (stopped safely before AWS login).
 
+## Phase 10: portfolio (approved 2026-11-26)
+
+| ID | Item | Evidence | Status |
+|---|---|---|---|
+| P10-1 | Recruiter-ready documentation | README: status, results at a glance, live screenshots (cropped to remove the AWS account header; no account IDs, e-mail addresses or resource IDs), phase-by-phase evidence links, rebuild section. New: `docs/technical-report.md`, `docs/demo-script.md`, `docs/interview-notes.md`. Every figure is taken from the evidence entries above | ✅ |
+
 ## Validation scenarios (Phase 9 target)
 
 See `docs/validation-scenarios.md`. Rows are filled in only as each scenario runs.

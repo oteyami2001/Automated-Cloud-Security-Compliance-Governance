@@ -6,13 +6,67 @@ explicitly authorised low-risk issues (or higher-risk ones after human approval)
 and keeps checksummed audit evidence mapped to NIST SP 800-53 Rev. 5, the CIS AWS Foundations
 Benchmark, PCI DSS v4.0.1 and SOC 2.
 
-> **Current status: Phase 2 (offline security automation) complete, awaiting approval.** Code,
-> Terraform, runbooks and CI exist and are tested offline (213 Python tests at 98 % coverage,
-> 42 `terraform test` runs; Checkov, Trivy, TFLint, Bandit, zizmor clean). **Nothing is deployed to AWS.**
+> **Status: complete (Phases 0–10).** Deployed to AWS, validated with **16 of 17 scenarios verified
+> live** (scenario 16 offline only: an organization SCP denies Security Hub and GuardDuty, never
+> bypassed), then **destroyed with a verified cleanup**. The bootstrap layer is kept so the platform
+> can be rebuilt in two steps ([docs/rebuild.md](docs/rebuild.md)).
 > Status vocabulary: 📝 planned · 🧱 implemented · ✅ tested offline · ☁️ verified in AWS (ADR 0001).
 >
 > This is a **framework-aligned** portfolio project. It is not certified, attested or "compliant"
 > with any framework.
+
+## Results at a glance
+
+| | |
+|---|---|
+| **Posture (last live report)** | 86.5 % of 74 evaluated resources passing, 10 open findings, 2 remediations verified by Config |
+| **Validation** | 16/17 scenarios verified in AWS or GitHub with run IDs and timestamps ([evidence table](docs/portfolio-evidence.md#validation-scenarios-phase-9-target)) |
+| **Remediation** | Auto-fix (Mode 2) for low-risk issues and owner-approved fix (Mode 3) for SSH exposure, on allowlisted test resources only; a rejected approval changed nothing |
+| **Drift** | A console change was reported as an unapproved change **10 s** later, caught by the drift workflow and restored through a reviewed plan/apply |
+| **Supply chain / CI** | An insecure Terraform PR was blocked by Checkov, Trivy and `terraform test`; every AWS change was a digest-bound, owner-approved apply via GitHub OIDC (no stored keys) |
+| **Quality** | 319 Python tests at 98 % coverage, 46 `terraform test` runs over 12 modules, Ruff, Bandit, TFLint, Checkov, Trivy, zizmor, actionlint |
+| **Cost** | USD 1.12 of usage for the whole account over the project's days, fully covered by credits ([cost model](docs/cost-model.md)) |
+| **Cleanup** | 113 resources destroyed after a reviewed destroy digest; before/after discovery diff shows nothing else changed |
+
+### Screenshots (captured live before the cleanup)
+
+**Posture metrics** (CloudWatch dashboard; the numbers equal the stored report and a DynamoDB recount):
+
+![Posture dashboard: 86.5 % compliance, 74 evaluated, 10 open, 2 remediated](docs/images/posture-dashboard.png)
+
+**Compliance report checks** (`compliance-report` workflow, read-only): checksum, leak scan, metrics = report = recount:
+
+![compliance-report workflow: all checks passed](docs/images/compliance-report-checks.png)
+
+**Drift detection** (scenario 15): the workflow names the drifted resource and opens an issue; the
+resolution records detection, restore and "No drift":
+
+![Drift issue #35](docs/images/drift-issue.png)
+
+<details>
+<summary>More: operational health and AWS Config rules</summary>
+
+![Operational health: Lambda invocations/errors, dead letters](docs/images/operational-health.png)
+
+![AWS Config: noncompliant acscg rules](docs/images/config-noncompliant-rules.png)
+
+</details>
+
+## What was proven, phase by phase
+
+| Phase | Delivered | Evidence |
+|---|---|---|
+| 0–1 Discovery and design | Account assessment, 15-control catalog mapped to NIST 800-53, CIS, PCI DSS, SOC 2; threat model; cost model; 13 ADRs | [phase-0](docs/phase-0-assessment.md), [design docs](docs/architecture.md) |
+| 2 Offline automation | All logic proven without AWS: normaliser, severity, lifecycle, gatekeeper, evidence, reports | P2-1…P2-11 |
+| 3 Secure bootstrap | State bucket (SSE-KMS, versioning, native locking), OIDC roles per environment, permissions boundary, budget | P3-1…P3-8 |
+| 4 Monitoring | Config recorder + 22 rules, EventBridge routing, CloudTrail integration (existing trail reused) | P4-1…P4-15 |
+| 5 Findings engine | Processor, reconciler, DynamoDB, DLQ, SNS, evidence with SHA-256 + Object Lock | P5-1…P5-11 |
+| 6 Remediation | Gatekeeper + SSM runbooks in a time-boxed, fixtures-only window; 7 defects found live and fixed, all failing closed | P6-1…P6-12 |
+| 7 Reporting | EMF posture metrics, dashboard, read-only report verification | P7-1…P7-3 |
+| 8 Governance | Drift detection, cleanup workflow, daily verification, GitHub settings verified from the API | P8-1…P8-4 |
+| 9 Validation and cleanup | Measured cost, verified destroy, before/after diff | P9-1…P9-4 |
+
+Technical write-up: [docs/technical-report.md](docs/technical-report.md) · Demo: [docs/demo-script.md](docs/demo-script.md) · Interview prep: [docs/interview-notes.md](docs/interview-notes.md)
 
 ## The lifecycle it automates
 
@@ -142,10 +196,14 @@ Framework mappings, versions, sources and the verification log are in
 | [docs/cost-model.md](docs/cost-model.md) | Unit prices (AWS Price List), assumptions, daily/monthly/demo estimates |
 | [docs/cicd-design.md](docs/cicd-design.md) | Workflows, OIDC, plan integrity, repository governance |
 | [docs/validation-scenarios.md](docs/validation-scenarios.md) | The 17 validation scenarios |
-| [docs/roadmap.md](docs/roadmap.md) | Phase plan, exit criteria, Phase 2 task list |
+| [docs/roadmap.md](docs/roadmap.md) | Phase plan and exit criteria (all phases complete) |
 | [docs/bootstrap-runbook.md](docs/bootstrap-runbook.md) | Read-only discovery (now) and bootstrap (Phase 3) |
 | [docs/remediation-runbook.md](docs/remediation-runbook.md) | Operator procedures: windows, approvals, rollback, exceptions |
 | [docs/portfolio-evidence.md](docs/portfolio-evidence.md) | Evidence log with run IDs and timestamps |
+| [docs/technical-report.md](docs/technical-report.md) | End-to-end technical report: design, what happened in AWS, defects, lessons |
+| [docs/demo-script.md](docs/demo-script.md) | 5-minute walkthrough of the repository and evidence |
+| [docs/interview-notes.md](docs/interview-notes.md) | Design questions and answers |
+| [docs/rebuild.md](docs/rebuild.md) | Rebuilding the platform after cleanup (GitHub Actions or CloudShell) |
 | [docs/adr/](docs/adr/README.md) | Architecture Decision Records |
 
 ## Repository layout
@@ -175,6 +233,12 @@ make check
 `make check` runs lint, SAST, catalog validation, generated-doc checks, the suppression register
 and the tests with the 90 % coverage gate. `make terraform` runs fmt/validate/`terraform test` for
 every module and root. No AWS credentials are needed.
+
+## Rebuild
+
+The workload stack was destroyed after validation. Rebuild it with **terraform-plan** then
+**terraform-apply** (owner approval), or from AWS CloudShell with `bash scripts/rebuild.sh`. Details
+and caveats: [docs/rebuild.md](docs/rebuild.md).
 
 ## Related projects
 
