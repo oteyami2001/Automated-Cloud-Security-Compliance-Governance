@@ -9,7 +9,7 @@
 |---|---|---|---|---|
 | `github-plan` | GitHub Actions | OIDC `aud = sts.amazonaws.com`, `sub = repo:oteyami2001@<owner-id>/<repo>@<repo-id>:environment:dev-plan` (StringEquals, immutable IDs) | `terraform plan`, drift detection | State lock object only |
 | `github-apply` | GitHub Actions | `…:environment:dev` (required reviewers) | Apply the reviewed plan | Project resources (tag/name-scoped), state |
-| `github-report` | **Not created (Phase 7 decision).** `compliance-report.yml` uses the read-only `github-dev-plan` role: the daily schedule writes the report, the workflow only reads it | — | — |
+| `github-report` | GitHub Actions | `…:ref:refs/heads/main` + workflow `compliance-report.yml` (`job_workflow_ref`) | Invoke the report generator, read reports | **Exists (Phase 3) but unused since Phase 7:** `compliance-report.yml` uses the read-only `github-dev-plan` role |
 | `github-cleanup` | GitHub Actions | `…:environment:dev-cleanup` (required reviewers) | Approved destroy of project resources | Project resources; `s3:BypassGovernanceRetention` on the evidence bucket only |
 | `findings-processor` | Lambda | `lambda.amazonaws.com`, `aws:SourceAccount` | Process events | Own table, `evidence/` prefix, SNS topic, SQS DLQ, own logs |
 | `remediation-gatekeeper` | Lambda | `lambda.amazonaws.com` | Decide and start runbooks | Own table items (`REM#`, `LOCK#`), `ssm:StartAutomationExecution` on the 4 `acscg-*` documents, `iam:PassRole` on the 4 execution roles only |
