@@ -1,0 +1,43 @@
+# Remediation policy source for dev. Terraform renders it with templatefile() into the SSM parameter
+# /acscg/dev/platform-policy, adding: approvers (sensitive TF_VAR), project_inventory,
+# approved_change_principals and project_role_arns. Template variables: ${account_id}, ${region} and
+# ${fixture_sg_arn} (the fixture security group's ARN, known only after it exists: never committed).
+# Validated by policies/schemas/remediation-policy.schema.json and remediation_engine.policy.parse_policy.
+environment: dev
+# TEST FIXTURE: the Phase 6 window as it was open (2026-11-25). Used only by terraform/stack/tests to
+# prove the window guards. Never deployed: policy_source_file accepts tests/fixtures paths only.
+# Phase 6 remediation window (approved 2026-11-25). Fixture resources only; every entry expires on its
+# own. SEC-014 and SEC-001 are auto (Mode 2); SEC-005 always needs approval (Mode 3, control
+# eligibility). Closed again by PR (step D): remediation_enabled false, allowlist empty.
+remediation_enabled: true
+remediation_mode: auto_low_risk   # report_only | auto_low_risk | human_approval
+approval:
+  timeout_minutes: 240
+limits:
+  max_attempts_per_finding: 2
+allowlist:                        # exact ARNs only; see docs/remediation-runbook.md §2
+  - id: AL-001
+    control_id: SEC-005
+    action: ec2:RevokeSecurityGroupIngress
+    account: "${account_id}"
+    region: "${region}"
+    resource_arn: "${fixture_sg_arn}"
+    expires_at: "2026-11-28T00:00:00Z"
+    reason: Phase 6 scenarios 9-11, unattached fixture SG in a VPC without internet gateway
+  - id: AL-002
+    control_id: SEC-001
+    action: s3:PutBucketPublicAccessBlock
+    account: "${account_id}"
+    region: "${region}"
+    resource_arn: "arn:aws:s3:::acscg-dev-fixture-${account_id}-${region}"
+    expires_at: "2026-11-28T00:00:00Z"
+    reason: Phase 6 scenario 8, empty fixture bucket
+  - id: AL-003
+    control_id: SEC-014
+    action: logs:PutRetentionPolicy
+    account: "${account_id}"
+    region: "${region}"
+    resource_arn: "arn:aws:logs:${region}:${account_id}:log-group:/acscg/dev/fixture"
+    expires_at: "2026-11-28T00:00:00Z"
+    reason: Phase 6 scenario 8, empty fixture log group
+protected_resources: []           # pre-existing resources from discovery (D13): never remediated
