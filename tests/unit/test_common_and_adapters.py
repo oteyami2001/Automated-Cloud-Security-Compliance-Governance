@@ -535,6 +535,34 @@ def test_report_handler_writes_three_objects(catalog: Catalog, harness: Harness)
     ]
     assert all(c[1]["ServerSideEncryption"] == "aws:kms" for c in s3.calls)
     assert result["summary"]["open_findings"] == 1 and ACCOUNT not in result["public_markdown"]
+    assert result["metric_records"] == 1 + len(result["summary"]["open_by_severity"])
+
+
+def test_emf_records_equal_the_report_and_carry_no_identifiers(catalog: Catalog, harness: Harness, capsys) -> None:  # type: ignore[no-untyped-def]
+    """Scenario 14 metrics: every value is the report's own number (Phase 7)."""
+    import json as _json
+
+    from acscg.report_generator.report import emf_records, metric_namespace
+
+    harness.processor.process(config_event())
+    generate(harness.store, catalog, make_settings(), Recorder(), "2026-11-24T12:00:00Z")
+    lines = [_json.loads(x) for x in capsys.readouterr().out.splitlines() if x.startswith("{")]
+    main = next(x for x in lines if "OpenFindings" in x)
+    meta = main["_aws"]["CloudWatchMetrics"][0]
+    assert meta["Namespace"] == metric_namespace("dev") == "ACSCG/acscg-dev" and meta["Dimensions"] == [[]]
+    assert main["_aws"]["Timestamp"] == 1795521600000  # 2026-11-24T12:00:00Z
+    assert {m["Name"] for m in meta["Metrics"]} <= set(main)  # every declared metric has a value
+    report = build_report(harness.store.all_findings(), catalog, environment="dev", generated_at="t")
+    assert main["OpenFindings"] == report["summary"]["open_findings"] == 1
+    assert main["ResourcesEvaluated"] == report["summary"]["resources_evaluated"]
+    by_sev = {x["Severity"]: x["OpenFindingsBySeverity"] for x in lines if "Severity" in x}
+    assert by_sev == report["summary"]["open_by_severity"]
+    assert ACCOUNT not in _json.dumps(lines) and SG_ID not in _json.dumps(lines)
+    empty = build_report([], catalog, environment="dev", generated_at="t")
+    first = emf_records(empty, namespace="n", timestamp_ms=0, report_key="k")[0]
+    assert "ComplianceScore" not in first and "ComplianceScore" not in {
+        m["Name"] for m in first["_aws"]["CloudWatchMetrics"][0]["Metrics"]
+    }
 
 
 # ------------------------------------------------------------------ packaging

@@ -72,6 +72,11 @@ resource "aws_cloudwatch_metric_alarm" "remediation_failed" {
   depends_on          = [aws_cloudwatch_log_metric_filter.remediation_failed]
 }
 
+locals {
+  # Written by the report generator as Embedded Metric Format (src/acscg/report_generator/report.py).
+  posture_namespace = "ACSCG/${var.name_prefix}"
+}
+
 resource "aws_cloudwatch_dashboard" "this" {
   dashboard_name = "${var.name_prefix}-security-posture"
   dashboard_body = jsonencode({
@@ -83,7 +88,7 @@ resource "aws_cloudwatch_dashboard" "this" {
         width  = 24
         height = 2
         properties = {
-          markdown = "## ACSCG ${var.name_prefix}\nOperational health. Compliance posture is in the daily report (reports/ in the evidence bucket). Framework-aligned, not certified."
+          markdown = "## ACSCG ${var.name_prefix}\nOperational health and posture metrics from the daily report (reports/ in the evidence bucket; the metrics equal the stored report). Framework-aligned technical control results, not a certification."
         }
       },
       {
@@ -128,6 +133,37 @@ resource "aws_cloudwatch_dashboard" "this" {
           region = var.region
           query  = "SOURCE '${var.processor_log_group}' | filter message = 'finding state' | stats count(*) as transitions by state, control_id | sort transitions desc"
           view   = "table"
+        }
+      },
+      {
+        type   = "metric"
+        x      = 0
+        y      = 14
+        width  = 12
+        height = 6
+        properties = {
+          title   = "Posture (latest daily report)"
+          region  = var.region
+          view    = "singleValue"
+          stat    = "Maximum"
+          period  = 86400
+          metrics = [for m in ["ComplianceScore", "ResourcesEvaluated", "OpenFindings", "RemediatedFindings"] : [local.posture_namespace, m]]
+        }
+      },
+      {
+        type   = "metric"
+        x      = 12
+        y      = 14
+        width  = 12
+        height = 6
+        properties = {
+          title   = "Open findings by severity"
+          region  = var.region
+          view    = "timeSeries"
+          stacked = true
+          stat    = "Maximum"
+          period  = 86400
+          metrics = [for s in ["critical", "high", "medium", "low", "informational"] : [local.posture_namespace, "OpenFindingsBySeverity", "Severity", s]]
         }
       },
     ]

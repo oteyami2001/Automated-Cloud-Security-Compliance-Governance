@@ -172,3 +172,62 @@ def render_markdown(report: dict[str, Any], *, public: bool = True) -> str:
             lines.append(f"| {f['control_id']} | {f['severity']} | {f['state']} | {f['resource_type']} | {resource} |")
     text = "\n".join(lines) + "\n"
     return mask(text) if public else text
+
+
+def metric_namespace(environment: str) -> str:
+    return f"ACSCG/acscg-{environment}"
+
+
+def emf_records(report: dict[str, Any], *, namespace: str, timestamp_ms: int, report_key: str) -> list[dict[str, Any]]:
+    """CloudWatch Embedded Metric Format records for the report summary.
+
+    Written to the function's log, CloudWatch turns them into metrics: no PutMetricData permission is
+    needed. Every value comes from the report, so the metrics equal the stored report (checked by
+    scripts/compliance_report.py). Resource IDs never appear here.
+    """
+    summary = report["summary"]
+    values: dict[str, tuple[float, str]] = {
+        "ResourcesEvaluated": (summary["resources_evaluated"], "Count"),
+        "OpenFindings": (summary["open_findings"], "Count"),
+        "RemediatedFindings": (summary["remediated_findings"], "Count"),
+        "ExcludedSyntheticOrSample": (summary["excluded_synthetic_or_sample"], "Count"),
+    }
+    if summary["compliance_score"] is not None:
+        values["ComplianceScore"] = (summary["compliance_score"], "Percent")
+    records = [
+        {
+            "_aws": {
+                "Timestamp": timestamp_ms,
+                "CloudWatchMetrics": [
+                    {
+                        "Namespace": namespace,
+                        "Dimensions": [[]],
+                        "Metrics": [{"Name": n, "Unit": u} for n, (_, u) in sorted(values.items())],
+                    }
+                ],
+            },
+            "message": "posture metrics",
+            "report_key": report_key,
+            **{n: v for n, (v, _) in values.items()},
+        }
+    ]
+    for severity, count in summary["open_by_severity"].items():
+        records.append(
+            {
+                "_aws": {
+                    "Timestamp": timestamp_ms,
+                    "CloudWatchMetrics": [
+                        {
+                            "Namespace": namespace,
+                            "Dimensions": [["Severity"]],
+                            "Metrics": [{"Name": "OpenFindingsBySeverity", "Unit": "Count"}],
+                        }
+                    ],
+                },
+                "message": "posture metrics",
+                "report_key": report_key,
+                "Severity": severity,
+                "OpenFindingsBySeverity": count,
+            }
+        )
+    return records

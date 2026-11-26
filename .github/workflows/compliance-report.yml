@@ -1,0 +1,63 @@
+# Scenario 14 (Phase 7): read-only check of the latest compliance report (scripts/compliance_report.py).
+# Uses the read-only plan role (environment dev-plan, main only). It never invokes or writes anything in
+# AWS: the report itself is written daily by the report-generator Lambda. The job summary shows the
+# public Markdown (no account IDs, resource IDs, ARNs, IPs or e-mail addresses) only if the leak scan
+# passed, plus PASS/FAIL/INFO lines without identifiers.
+name: compliance-report
+
+on:
+  workflow_dispatch: # dev only; staging/prod are reference configurations (ADR 0002)
+  schedule:
+    - cron: "47 6 * * 1" # Mondays, 30 min after the daily report (06:17 UTC)
+
+permissions: {}
+
+concurrency:
+  group: compliance-report-dev
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-2
+
+jobs:
+  report:
+    name: compliance report (dev)
+    runs-on: ubuntu-24.04
+    environment: dev-plan
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Environment secrets present
+        env:
+          ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        run: |
+          [[ $ACCOUNT_ID =~ ^[0-9]{12}$ ]] || { echo "::error::secret AWS_ACCOUNT_ID is missing or not 12 digits in this environment"; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Install pinned, hash-verified dependencies
+        run: python -m pip install --require-hashes --no-deps -r requirements-dev.lock
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/acscg-github-dev-plan
+          role-session-name: acscg-report-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+      - name: Check the latest report (read-only)
+        run: |
+          set -o pipefail
+          PYTHONPATH=src python scripts/compliance_report.py --env dev --region "$AWS_REGION" --public-out report-public.md | tee checks.txt
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "### Compliance report checks (dev)"
+            echo '```'
+            cat checks.txt 2>/dev/null || echo "no output"
+            echo '```'
+            if [ -s report-public.md ]; then cat report-public.md; else echo "_Public report not shown (missing or failed the leak scan)._"; fi
+          } >> "$GITHUB_STEP_SUMMARY"

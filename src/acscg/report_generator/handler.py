@@ -5,11 +5,11 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from acscg.common.canonical import canonical_json, sha256_hex, utc_now
+from acscg.common.canonical import canonical_json, parse_time, sha256_hex, utc_now
 from acscg.common.catalog import Catalog
 from acscg.common.settings import Settings
 from acscg.findings_processor.store import Store
-from acscg.report_generator.report import build_report, render_markdown
+from acscg.report_generator.report import build_report, emf_records, metric_namespace, render_markdown
 
 
 def generate(store: Store, catalog: Catalog, settings: Settings, s3: Any, generated_at: str) -> dict[str, Any]:
@@ -32,11 +32,21 @@ def generate(store: Store, catalog: Catalog, settings: Settings, s3: Any, genera
             SSEKMSKeyId=settings.kms_key_id,
             Metadata={"acscg-sha256": sha256_hex(content)},
         )
+    key = f"reports/{stamp}/report.json"
+    metrics = emf_records(
+        report,
+        namespace=metric_namespace(settings.environment),
+        timestamp_ms=int(parse_time(generated_at).timestamp() * 1000),
+        report_key=key,
+    )
+    for record in metrics:
+        print(json.dumps(record, sort_keys=True))
     return {
-        "report_key": f"reports/{stamp}/report.json",
+        "report_key": key,
         "sha256": digest,
         "summary": report["summary"],
         "public_markdown": public_md,
+        "metric_records": len(metrics),
     }
 
 

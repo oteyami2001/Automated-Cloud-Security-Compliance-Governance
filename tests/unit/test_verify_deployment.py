@@ -148,7 +148,7 @@ def test_all_checks_pass_and_nothing_identifying_is_printed(capsys: pytest.Captu
     assert vd.main(["--env", "dev"], factory=lambda _r: clients(fake)) == 0
     out = capsys.readouterr().out
     assert "RESULT: all checks passed" in out
-    assert out.count("PASS  ") == 17
+    assert out.count("PASS  ") == 15
     for secret in (ACCOUNT, SG, UNTAGGED, BUCKET):
         assert secret not in out
 
@@ -178,3 +178,21 @@ def test_missing_fixtures_are_info_not_failures() -> None:
     report = vd.verify(clients(fake), "dev", "us-east-2", NOW)
     assert any(line.startswith("INFO  scenario 2") for line in report.lines)
     assert any(line.startswith("INFO  scenario 4") for line in report.lines)
+
+
+def test_closed_window_compliant_fixtures_with_resolved_findings_pass() -> None:
+    """After Phase 6 the fixture violations are off: Config COMPLIANT and findings resolved agree (P7)."""
+    fake = Fake(healthy=False)  # Config says COMPLIANT and the bucket is not public
+    resolved = Fake.scan
+
+    def scan(self: Fake, **kw: Any) -> dict[str, Any]:
+        page = resolved(self, **kw)
+        for item in page["Items"]:
+            item["state"] = {"S": "RESOLVED_EXTERNALLY"}
+        return page
+
+    fake.scan = scan.__get__(fake)  # type: ignore[method-assign]
+    fake.get_bucket_policy_status = lambda Bucket: {"PolicyStatus": {"IsPublic": False}}  # type: ignore[method-assign]  # noqa: N803
+    report = vd.verify(clients(fake), "dev", "us-east-2", NOW)
+    agree = [x for x in report.lines if "result and finding agree" in x]
+    assert len(agree) == 3 and all(x.startswith("PASS") and "resolved or none" in x for x in agree), agree

@@ -154,6 +154,12 @@ turning the violations off. Phase 8 drift detection covers the general case.
 off; remediation module removed (`enable_remediation = false`). Evidence objects stay in the
 Object Lock evidence bucket. Verified closed in AWS (P6-12).
 
+## Phase 7: reporting (approved 2026-11-26)
+
+| ID | Item | Evidence | Status |
+|---|---|---|---|
+| P7-1 | Posture metrics and checks (code) | The report generator writes its summary as CloudWatch Embedded Metric Format records (namespace `ACSCG/acscg-<env>`: ComplianceScore, ResourcesEvaluated, OpenFindings, RemediatedFindings, OpenFindingsBySeverity). They go to its own log, so no PutMetricData permission is needed. Dashboard: posture and severity widgets. `compliance-report.yml` (read-only plan role) runs `scripts/compliance_report.py`: SHA-256 of the newest stored report, metrics = report, DynamoDB recount = report when recent, leak scan of the public Markdown before it is shown. `verify_deployment.py` scenarios 2–4 now check that Config's result and the finding agree, because the fixture violations are off after Phase 6. Tests: EMF values equal the report and carry no identifiers; the checks pass on a fresh report and fail on tampering, wrong or missing metrics, a recount mismatch and a leaky public report | ✅ |
+
 ## Validation scenarios (Phase 9 target)
 
 See `docs/validation-scenarios.md`. Rows are filled in only as each scenario runs.
