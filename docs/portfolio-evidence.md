@@ -174,6 +174,12 @@ owner checked and cleared them, and every check now passes.
 **Carried forward:** a scheduled verify run and the drift workflow are Phase 8; the `Project`
 cost-allocation tag check (P3-8) is still open.
 
+## Phase 8: DevSecOps and governance (approved 2026-11-26)
+
+| ID | Item | Evidence | Status |
+|---|---|---|---|
+| P8-1 | Governance workflows (code) | `drift-detection.yml` (weekly + manual, read-only plan role, issue job without AWS), `cleanup.yml` (read-only destroy plan, then owner-approved destroy with digest and `destroy-dev` confirmation), `verify-deployment.yml` daily and counting Lambda errors for every project function (gap P7-3), `ci.yml` weekly re-scan of `main`. Decision: no separate `security-scan.yml` (weekly CI + GitHub secret scanning cover it). Static tests: roles, environments, permissions, SHA pins, no expressions in `run`, inputs validated before AWS login, the issue job has no AWS access. GitHub settings read from here with the session token (2026-11-26T03:52Z): default branch, secret scanning + push protection, Dependabot security updates, `main` ruleset (PR, `ci-ok`, no force push, no deletion), repository ID = trust policies all PASS; 4 checks need the owner's `gh` login | ✅ |
+
 ## Validation scenarios (Phase 9 target)
 
 See `docs/validation-scenarios.md`. Rows are filled in only as each scenario runs.

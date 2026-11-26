@@ -130,3 +130,54 @@ def test_compliance_report_shows_only_the_scanned_public_markdown() -> None:
     run = "\n".join(s.get("run", "") for s in job["steps"])
     assert "--public-out report-public.md" in run and "report.md" not in run.replace("report-public.md", "")
     assert "lambda invoke" not in run and "put-" not in run  # never writes in AWS
+
+
+def _jobs(name: str) -> dict:
+    return load(name)["jobs"]
+
+
+def _role(job: dict) -> str:
+    creds = next(s for s in job["steps"] if s.get("uses", "").startswith("aws-actions/configure-aws-credentials@"))
+    assert creds["with"]["mask-aws-account-id"] is True
+    return creds["with"]["role-to-assume"].rsplit("/", 1)[1]
+
+
+@pytest.mark.parametrize("name", ["drift-detection.yml", "cleanup.yml"])
+def test_phase8_workflows_are_pinned_and_keep_expressions_out_of_run(name: str) -> None:
+    workflow = load(name)
+    assert workflow["permissions"] == {}
+    assert workflow["concurrency"]["group"] == "terraform-dev"  # never alongside a plan/apply on the same state
+    for job in workflow["jobs"].values():
+        for step in job["steps"]:
+            assert "${{" not in step.get("run", ""), step
+            if "uses" in step:
+                assert SHA_PIN.match(step["uses"]), step["uses"]
+            if step.get("uses", "").startswith("actions/checkout@"):
+                assert step["with"]["persist-credentials"] is False
+
+
+def test_drift_detection_is_read_only_and_issue_job_has_no_aws() -> None:
+    jobs = _jobs("drift-detection.yml")
+    drift, issue = jobs["drift"], jobs["issue"]
+    assert drift["environment"] == "dev-plan" and _role(drift) == "acscg-github-dev-plan"
+    assert drift["permissions"] == {"contents": "read", "id-token": "write"}
+    run = "\n".join(s.get("run", "") for s in drift["steps"])
+    assert "tf_ci.sh drift dev" in run and "tf_ci.sh apply" not in run
+    assert issue["permissions"] == {"issues": "write"} and "environment" not in issue  # no AWS, no checkout
+    assert not any(s.get("uses", "").startswith("aws-actions/") for s in issue["steps"])
+
+
+def test_cleanup_plans_read_only_and_destroys_only_with_digest_confirmation_and_approval() -> None:
+    jobs = _jobs("cleanup.yml")
+    plan, destroy = jobs["destroy-plan"], jobs["destroy"]
+    assert plan["if"] == "inputs.digest == ''" and destroy["if"] == "inputs.digest != ''"
+    assert plan["environment"] == "dev-plan" and _role(plan) == "acscg-github-dev-plan"
+    assert destroy["environment"] == "dev-cleanup" and _role(destroy) == "acscg-github-dev-cleanup"
+    names = [s.get("name", s.get("uses", "")) for s in destroy["steps"]]
+    login = next(i for i, n in enumerate(names) if n.startswith("aws-actions/configure-aws-credentials@"))
+    assert names.index("Inputs are well-formed") < login  # bad input never reaches AWS
+    checks = next(s for s in destroy["steps"] if s.get("name") == "Inputs are well-formed")["run"]
+    assert "^[0-9a-f]{64}$" in checks and '"$CONFIRM" = destroy-dev' in checks
+    last = destroy["steps"][-1]
+    assert "tf_ci.sh apply dev destroy" in last["run"] and set(last["env"]) >= {"EXPECTED_DIGEST", "CONFIRM_DESTROY"}
+    assert "tf_ci.sh plan dev destroy" in plan["steps"][-1]["run"]

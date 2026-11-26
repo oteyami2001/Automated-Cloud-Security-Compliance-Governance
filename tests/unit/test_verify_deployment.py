@@ -132,6 +132,16 @@ class Fake:
         value = {"NumberOfNotificationsDelivered": 12.0}.get(kw["MetricName"], 0.0)
         return {"Datapoints": [{"Sum": value}]}
 
+    def list_metrics(self, **kw: Any) -> dict[str, Any]:
+        def m(name: str) -> dict[str, Any]:
+            return {"Dimensions": [{"Name": "FunctionName", "Value": name}]}
+
+        if "NextToken" not in kw:  # another project's function, and a page break
+            return {"Metrics": [m("aiops-dev-other"), m("acscg-dev-findings-processor")], "NextToken": "m2"}
+        return {
+            "Metrics": [m("acscg-dev-remediation-gatekeeper"), {"Dimensions": [{"Name": "Resource", "Value": "x"}]}]
+        }
+
     def get_queue_url(self, **_kw: Any) -> dict[str, str]:
         return {"QueueUrl": f"https://sqs.us-east-2.amazonaws.com/{ACCOUNT}/acscg-dev-findings-dlq"}
 
@@ -196,3 +206,21 @@ def test_closed_window_compliant_fixtures_with_resolved_findings_pass() -> None:
     report = vd.verify(clients(fake), "dev", "us-east-2", NOW)
     agree = [x for x in report.lines if "result and finding agree" in x]
     assert len(agree) == 3 and all(x.startswith("PASS") and "resolved or none" in x for x in agree), agree
+
+
+def test_lambda_errors_cover_every_project_function() -> None:
+    """P7-3: errors of a function outside the core list (the Phase 6 gatekeeper) must count."""
+    fake = Fake()
+    asked: list[str] = []
+
+    def stats(**kw: Any) -> dict[str, Any]:
+        if kw["MetricName"] == "Errors":
+            fn = kw["Dimensions"][0]["Value"]
+            asked.append(fn)
+            return {"Datapoints": [{"Sum": 3.0 if fn.endswith("gatekeeper") else 0.0}]}
+        return {"Datapoints": [{"Sum": 12.0}]}
+
+    fake.get_metric_statistics = stats  # type: ignore[method-assign]
+    report = vd.verify(clients(fake), "dev", "us-east-2", NOW)
+    assert "acscg-dev-remediation-gatekeeper" in asked and "aiops-dev-other" not in asked
+    assert "FAIL  lambda errors (24 h, 5 functions): 3" in report.lines

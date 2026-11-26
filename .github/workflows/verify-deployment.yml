@@ -5,6 +5,8 @@ name: verify-deployment
 
 on:
   workflow_dispatch: # dev only; staging/prod are reference configurations (ADR 0002)
+  schedule:
+    - cron: "11 7 * * *" # daily, after the 06:17 UTC report (Phase 8)
 
 permissions: {}
 
