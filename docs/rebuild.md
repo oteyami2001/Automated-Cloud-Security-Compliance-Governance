@@ -14,6 +14,10 @@ and makes a rebuild two steps. GitHub secrets and environments are unchanged.
 3. Confirm the SNS subscription e-mail (the topic is new).
 4. After ~30 minutes (Config's first evaluation), Actions → **verify-deployment** → Run workflow.
 
+After a rebuild, re-enable the paused schedules: uncomment the `schedule:` lines in
+`verify-deployment.yml`, `compliance-report.yml` and `drift-detection.yml` (paused in Phase 9 so they
+do not fail or open drift issues against a destroyed stack).
+
 ## Option B: AWS CloudShell, one command
 
 ```bash

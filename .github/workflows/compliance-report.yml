@@ -7,8 +7,10 @@ name: compliance-report
 
 on:
   workflow_dispatch: # dev only; staging/prod are reference configurations (ADR 0002)
-  schedule:
-    - cron: "47 6 * * 1" # Mondays, 30 min after the daily report (06:17 UTC)
+  # schedule paused: the dev stack was destroyed in Phase 9 (evidence P9-3). Restore these two lines
+  # after a rebuild (docs/rebuild.md):
+  # schedule:
+  #   - cron: "47 6 * * 1" # Mondays, 30 min after the daily report (06:17 UTC)
 
 permissions: {}
 

@@ -1,6 +1,6 @@
 # Cost model
 
-**Status: 📝 estimate (Phase 1).** Planning numbers, not a quote. Actual charges depend on how many
+**Status: 📝 estimate (Phase 1); measured in Phase 9:** USD 1.12 of usage for the whole account, 2026-11-23…26, fully covered by credits (USD 0.00 paid); see portfolio-evidence P9-2. Planning numbers, not a quote. Actual charges depend on how many
 resources the account contains, how often they change, and which services already run account-wide.
 Re-check before every deployment phase (prompt §15). **The USD 25 budget is an alert, not a cap.**
 Free tier and free trials are **not** assumed.
