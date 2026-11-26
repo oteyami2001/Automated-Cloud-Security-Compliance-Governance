@@ -101,8 +101,9 @@ def test_tf_ci_redaction_removes_ids_emails_and_auth_blobs() -> None:
     assert "vpc-<id>" in out and "<removed>" in out
 
 
-def test_verify_workflow_is_read_only() -> None:
-    workflow = load("verify-deployment.yml")
+@pytest.mark.parametrize("name", ["verify-deployment.yml", "compliance-report.yml"])
+def test_read_only_workflows(name: str) -> None:
+    workflow = load(name)
     assert workflow["permissions"] == {}
     assert True not in workflow or not (workflow[True]["workflow_dispatch"] or {}).get("inputs")
     (job,) = workflow["jobs"].values()
@@ -122,3 +123,10 @@ def test_approvers_come_from_an_environment_secret(name: str) -> None:
     assert (
         "TF_VAR_approvers=$(python scripts/normalise_approvers.py) || exit 1" in step["run"]
     )  # validated, only when set
+
+
+def test_compliance_report_shows_only_the_scanned_public_markdown() -> None:
+    (job,) = load("compliance-report.yml")["jobs"].values()
+    run = "\n".join(s.get("run", "") for s in job["steps"])
+    assert "--public-out report-public.md" in run and "report.md" not in run.replace("report-public.md", "")
+    assert "lambda invoke" not in run and "put-" not in run  # never writes in AWS

@@ -23,6 +23,22 @@ from typing import Any
 # Alerts are sent only when a finding changes state, so a quiet day has none. Seven days covers the
 # last scenario run; the first verification used 24 h and reported a false FAIL (evidence P5-11).
 SNS_WINDOW_HOURS = 7 * 24
+# Fixture violations are switched on only during a scenario (Phase 6 closed them), so the checks
+# accept either an open violation or a resolved one, as long as Config and the finding agree.
+OPEN_STATES = {
+    "OPEN",
+    "REPORTED",
+    "REJECTED_POLICY",
+    "PENDING_APPROVAL",
+    "REMEDIATING",
+    "REMEDIATION_REJECTED",
+    "APPROVAL_EXPIRED",
+    "REMEDIATION_FAILED",
+    "VERIFYING",
+    "VERIFICATION_FAILED",
+    "SUPPRESSED_EXCEPTION",
+}
+RESOLVED_STATES = {"COMPLIANT", "VERIFIED_RESOLVED", "RESOLVED_EXTERNALLY"}
 
 REQUIRED_EVIDENCE_FIELDS = (
     "finding_id",
@@ -172,44 +188,44 @@ def verify(c: Clients, env: str, region: str, now: datetime | None = None) -> Re
     def finding(control: str, ident: str | None) -> dict[str, Any] | None:
         return next((f for f in findings if _s(f, "control_id") == control and ident and ident in json.dumps(f)), None)
 
+    def agree(scenario: str, control: str, result: str, f: dict[str, Any] | None, *, severity: str) -> None:
+        """Config's result and the finding agree, with or without an active fixture violation (P7)."""
+        state = _s(f, "state") if f else ""
+        if result == "NON_COMPLIANT":
+            ok = bool(f) and state in OPEN_STATES and _s(f, "severity") == severity
+            expect = f"open, {severity}"
+        else:
+            ok = result == "COMPLIANT" and (not f or state in RESOLVED_STATES)
+            expect = "resolved or none"
+        rep.check(
+            f"{scenario}: Config {control} result and finding agree ({expect})",
+            ok,
+            f"{result or 'no result'} / {state or 'no finding'}",
+        )
+
     if sg:
         rules = _rule_results(c.config, "AWS::EC2::SecurityGroup", sg)
         ssh = rules.get("acscg-sec005-restricted-ssh", ("", ""))[0]
-        rep.check("scenario 2 config: SSH rule NON_COMPLIANT on fixture-sg", ssh == "NON_COMPLIANT", ssh or "no result")
-        f = finding("SEC-005", sg)
-        rep.check(
-            "scenario 2 finding: SEC-005 REPORTED high",
-            bool(f) and _s(f, "state") == "REPORTED" and _s(f, "severity") == "high",
-            f"{_s(f, 'state')} {_s(f, 'severity')}" if f else "missing",
-        )
+        agree("scenario 2", "SEC-005", ssh, finding("SEC-005", sg), severity="high")
     else:
         rep.info("scenario 2", "fixture-sg not present")
     if untagged:
         rules = _rule_results(c.config, "AWS::EC2::SecurityGroup", untagged)
         tags = rules.get("acscg-sec013-tags-custom", ("", ""))
-        rep.check(
-            "scenario 3 config: custom tag rule names missing keys",
-            tags[0] == "NON_COMPLIANT" and "missing:" in tags[1],
-            f"{tags[0] or 'no result'} {tags[1][:80]}",
-        )
         f = finding("SEC-013", untagged)
-        rep.check(
-            "scenario 3 finding: SEC-013 REPORTED with missing keys",
-            bool(f) and _s(f, "state") == "REPORTED" and "missing:" in _s(f, "annotation"),
-            f"{_s(f, 'state')} {_s(f, 'annotation')[:80]}" if f else "missing",
-        )
+        agree("scenario 3", "SEC-013", tags[0], f, severity="low")
+        if tags[0] == "NON_COMPLIANT":
+            rep.check(
+                "scenario 3: the custom tag rule and the finding name the missing keys",
+                "missing:" in tags[1] and bool(f) and "missing:" in _s(f, "annotation"),
+                tags[1][:80],
+            )
     else:
         rep.info("scenario 3", "fixture-untagged-sg not present")
     try:
         rules = _rule_results(c.config, "AWS::S3::Bucket", bucket)
         bpa = rules.get("acscg-sec001-bucket-public-access", ("", ""))[0]
-        rep.check("scenario 4 config: bucket public access NON_COMPLIANT", bpa == "NON_COMPLIANT", bpa or "no result")
-        f = finding("SEC-001", bucket)
-        rep.check(
-            "scenario 4 finding: SEC-001 REPORTED high",
-            bool(f) and _s(f, "state") == "REPORTED" and _s(f, "severity") == "high",
-            f"{_s(f, 'state')} {_s(f, 'severity')}" if f else "missing",
-        )
+        agree("scenario 4", "SEC-001", bpa, finding("SEC-001", bucket), severity="high")
         public = c.s3.get_bucket_policy_status(Bucket=bucket)["PolicyStatus"]["IsPublic"]
         rep.check("scenario 4 live check: fixture bucket is NOT public", public is False, f"IsPublic={public}")
     except c.s3.exceptions.NoSuchBucket:
