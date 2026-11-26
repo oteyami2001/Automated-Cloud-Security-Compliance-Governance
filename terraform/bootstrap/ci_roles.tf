@@ -117,6 +117,10 @@ locals {
     Version = "2012-10-17"
     Statement = concat(local.state_access, local.project_write, local.deny_guardrails, [
       { Sid = "EvidenceCleanup", Effect = "Allow", Action = ["s3:BypassGovernanceRetention", "s3:DeleteObjectVersion", "s3:ListBucketVersions"], Resource = ["${local.arn}:s3:::acscg-*-evidence-*", "${local.arn}:s3:::acscg-*-evidence-*/*"] },
+      # Destroying the project's own recorder (config_ownership_mode = create, discovery D5). These
+      # actions have no resource-level permissions, so they are limited to the approved Region and to
+      # this role, which only the owner-approved cleanup environment can assume (Phase 9).
+      { Sid = "RemoveOwnConfigRecorder", Effect = "Allow", Action = ["config:StopConfigurationRecorder", "config:DeleteConfigurationRecorder", "config:DeleteDeliveryChannel"], Resource = "*", Condition = { StringEquals = { "aws:RequestedRegion" = var.region } } },
     ])
   }
 

@@ -59,6 +59,12 @@ run "bootstrap_guardrails" {
     error_message = "cleanup role needs evidence cleanup"
   }
   assert {
+    condition = (contains([for s in jsondecode(output.ci_role_policies["dev-cleanup"]).Statement : s.Sid], "RemoveOwnConfigRecorder") &&
+      !contains(flatten([for s in jsondecode(output.ci_role_policies["dev-apply"]).Statement : try(tolist(s.Action), [s.Action]) if s.Effect == "Allow"]), "config:DeleteConfigurationRecorder") &&
+    [for s in jsondecode(output.ci_role_policies["dev-cleanup"]).Statement : s.Condition.StringEquals["aws:RequestedRegion"] if s.Sid == "RemoveOwnConfigRecorder"][0] == "us-east-2")
+    error_message = "only the cleanup role may remove the project's recorder, and only in the approved Region (Phase 9)"
+  }
+  assert {
     condition     = alltrue([for k in ["dev-plan", "dev-apply", "dev-cleanup"] : contains([for s in jsondecode(output.ci_role_policies[k]).Statement : s.Sid if s.Effect == "Deny"], "NeverTouchOtherProjectsOrSharedIdentity")])
     error_message = "every CI role denies changes to other projects and the shared OIDC provider"
   }

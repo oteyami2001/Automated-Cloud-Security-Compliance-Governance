@@ -88,6 +88,11 @@ case "$CMD" in
     [[ ${EXPECTED_DIGEST:-} =~ ^[0-9a-f]{64}$ ]] || { echo "::error::EXPECTED_DIGEST must be 64 lowercase hex"; exit 2; }
     plan
     python3 "$ROOT/scripts/plan_guard.py" verify "$WORK/plan.json" --mode "$MODE" --expected "$EXPECTED_DIGEST"
+    if [ "$MODE" = destroy ]; then
+      # Only after the reviewed destroy digest matched: the Object Lock evidence bucket must be empty
+      # before Terraform can delete it (force_destroy stays false). Needs the cleanup role.
+      python3 "$ROOT/scripts/empty_evidence_bucket.py" --env "$ENV" --region "$REGION" --confirm "destroy-$ENV"
+    fi
     if terraform -chdir="$STACK" apply -input=false -lock-timeout=120s -no-color "$WORK/tfplan" >"$WORK/apply.log" 2>&1; then
       grep -E '^(Apply complete|Destroy complete)' "$WORK/apply.log"
     else

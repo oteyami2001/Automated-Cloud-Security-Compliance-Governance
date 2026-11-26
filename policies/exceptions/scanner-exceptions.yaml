@@ -328,6 +328,18 @@ suppressions:
   owner: oteyami2001
   review_by: '2027-05-01'
 - tool: ruff
+  rule: BLE001
+  path: scripts/empty_evidence_bucket.py
+  justification: a missing bucket means there is nothing to empty
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: ruff
+  rule: S603
+  path: tests/unit/test_empty_evidence_bucket.py
+  justification: syntax check of this repository's script
+  owner: oteyami2001
+  review_by: '2027-05-01'
+- tool: ruff
   rule: S603
   path: tests/unit/test_phase4_workflows.py
   justification: fixed bash running this repository's own redact function
