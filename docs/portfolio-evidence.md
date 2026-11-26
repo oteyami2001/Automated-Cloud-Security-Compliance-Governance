@@ -79,7 +79,7 @@ All results below were produced in the build environment without AWS credentials
 | P3-5 | Bootstrap plan reviewed (summary + digest) | `Plan: 20 to add, 0 to change, 0 to destroy.` 9 state resources, boundary, 4 CI roles + 4 inline policies + ReadOnlyAccess on dev-plan, budget. Nothing changed or destroyed. Digest `40a4f9f0…0c536f`, reviewed and approved 2026-11-24 | ☁️ |
 | P3-6 | Bootstrap applied, state migrated | `Plan digest matches the reviewed plan.` → `Apply complete! Resources: 20 added, 0 changed, 0 destroyed.` State migrated to the bucket (object SSE `aws:kms`). Local state files removed (2026-11-24, before 13:18 UTC) | ☁️ |
 | P3-7 | `verify_bootstrap.sh`: all checks passed | **2026-11-24T13:18:39Z: 17/17 PASS, `RESULT: all checks passed`**: state bucket (versioning, SSE-KMS, public access blocked, TLS-only), key rotation, boundary, each CI role trusts exactly one immutable subject, plan role read-only, budget filter, shared OIDC provider + `aiops`/`idp` roles + existing trail untouched | ☁️ |
-| P3-8 | Cost-allocation tag `Project` | `not found` at 13:18 UTC: new tags can take up to 24 h to appear, and in an Organization activation is usually done from the management account. Until active, the account-wide `aiops-account-monthly` budget (USD 30) is the backstop | ⏳ |
+| P3-8 | Cost-allocation tag `Project` (closed in P9-2: Organization member, activation only from the management account) | `not found` at 13:18 UTC: new tags can take up to 24 h to appear, and in an Organization activation is usually done from the management account. Until active, the account-wide `aiops-account-monthly` budget (USD 30) is the backstop | ⏳ |
 | P3-9 | Issue found during the run | CloudShell's 1 GB home cannot hold the ~700 MB AWS provider (`no space left on device`). Fixed: `bootstrap.sh` keeps `.terraform` in `/tmp` via `TF_DATA_DIR` | ✅ |
 
 ## Phase 4: security monitoring (approved 2026-11-24)
@@ -201,6 +201,23 @@ verify-deployment runs daily and covers every project Lambda, and CI re-scans `m
 | ID | Item | Evidence | Status |
 |---|---|---|---|
 | P9-1 | Cleanup made possible (code) | Destroy-readiness review: the evidence bucket is Object Lock (GOVERNANCE) with `force_destroy = false`, and the cleanup role could not stop or delete the project's Config recorder. Fixes: `scripts/empty_evidence_bucket.py` deletes every version and delete marker of exactly `acscg-<env>-evidence-<account>-<region>` with `BypassGovernanceRetention`, run by `tf_ci.sh apply <env> destroy` **only after the destroy digest matched** (tested order); bootstrap: the cleanup role alone gets `config:StopConfigurationRecorder`, `DeleteConfigurationRecorder`, `DeleteDeliveryChannel`, limited to the approved Region (Terraform test: the apply role does not). `scripts/rebuild.sh` + `docs/rebuild.md`: CloudShell rebuild with the same digest gate. Correction: the `report` CI role exists (bootstrap, Phase 3) and is unused | ✅ |
+| P9-2 | Cost (measured) and cost-allocation tag | Cost Explorer, 2026-11-23…26 (owner, CloudShell): **Usage USD 1.12, Credit −USD 1.12, paid USD 0.00, account-wide** (all services and all projects in the account, so this project's share is at most USD 1.12). Phase 1 estimate: ≈ USD 1.20–1.30 per active day; actual was lower over ~2.5 active days (serverless and Config only: no EC2, NAT, RDS or load balancers). **P3-8 closed:** `ListCostAllocationTags` → "Linked account doesn't have access to cost allocation tags": the account is an Organization member, and only the management account can activate `Project`. Per-project figures therefore cannot be isolated here; the account-wide budget was the backstop | ☁️ |
+| P9-3 | **Scenario 17**: verified destroy | Bootstrap re-applied first (digest `6395d102…906791b`, `1 changed`: cleanup role's Config recorder permissions; `bootstrap.sh verify` all PASS). Read-only destroy plan: cleanup run 45762268521, `113 to destroy`, digest `5886eda4…c17f102`, guard passed (deletes only). First destroy attempt (run 45764103054) stopped at the secrets check before any AWS login: the `dev-cleanup` environment had no secrets yet; the owner added them. Destroy run 45768750372 (owner-approved `dev-cleanup`): digest matched; **`evidence bucket emptied: 155 versions/markers deleted, 0 errors, 0 left`**; **`Apply complete! Resources: 0 added, 0 changed, 113 destroyed.`** | ☁️ |
+| P9-4 | Before/after: only project resources removed | `discover_aws.sh us-east-2 us-east-1` before (1,134 lines) and after, diffed by the owner: IAM roles 31 → 26 (the 4 Lambda roles + the recorder role); the `acscg-dev-config/-evidence/-fixture` buckets; the project's Config recorder (the account again has none in us-east-2, as at discovery D5). No `aiops-`/`idp-` change, OIDC provider unchanged, existing trail `idp-management-events` still logging (only its LatestDelivery advanced). Remaining `acscg` resources = the bootstrap layer, kept on purpose: `acscg-tfstate-…` bucket, `acscg-github-dev-plan/apply/cleanup` and `report` roles, `alias/acscg-tfstate`. No Lambda, DynamoDB table, SQS queue, SNS topic or Config rule left | ☁️ |
+
+### Phase 9 report (2026-11-26)
+
+**Result:** 16 of 17 scenarios verified in AWS or GitHub (scenario 16 offline only: the SCP denies
+Security Hub and GuardDuty, never bypassed). Measured cost: USD 1.12 of usage for the whole account
+over the project's days, fully covered by credits. The verified cleanup removed exactly the 113
+reviewed project resources, emptied the Object Lock evidence bucket only inside the approved run, and
+left other projects, the existing trail and the OIDC provider unchanged (before/after diff). The
+bootstrap layer stays (cents per month) so the platform can be rebuilt in two steps
+([rebuild.md](rebuild.md)).
+
+**Found and fixed before the destroy:** the evidence bucket could not have been deleted
+(Object Lock, no force destroy) and the cleanup role could not remove the Config recorder; the
+`dev-cleanup` environment had no secrets (stopped safely before AWS login).
 
 ## Validation scenarios (Phase 9 target)
 
@@ -208,7 +225,7 @@ See `docs/validation-scenarios.md`. Rows are filled in only as each scenario run
 
 | # | Scenario | Offline (Phase 2 test) | AWS | Run ID / evidence | Timestamp (UTC) |
 |---|---|---|---|---|---|
-| 1 | Compliant resource passes | ✅ `test_scenario_1_compliant_resource_passes` | ☁️ partial | Owner CloudShell check: fixture SG all 5 rules COMPLIANT before scenario 2. Fixture bucket baseline not captured before scenario 4 (SEC-003 NON_COMPLIANT by design: no versioning) | 2026-11-24T17:42Z |
+| 1 | Compliant resource passes | ✅ `test_scenario_1_compliant_resource_passes` | ☁️ | Fixture SG with no violation: Config `COMPLIANT` and finding resolved (verify run 45751076906); fixture log group and bucket `COMPLIANT` / `VERIFIED_RESOLVED` after Phase 6 (P6-12). Baseline before scenario 2: all 5 SG rules COMPLIANT (P5-10) | 2026-11-24T17:42Z, 2026-11-26T03:47Z |
 | 2 | Noncompliant SG detected | ✅ `test_scenario_2_noncompliant_security_group_detected` | ☁️ | Apply run 45452185377; verify run 45692556179: SSH rule NON_COMPLIANT, finding SEC-005 REPORTED high | 2026-11-24T17:49:37Z (Config), 2026-11-25T20:12Z (verify) |
 | 3 | Missing tags detected | ✅ `test_scenario_3_missing_tags_detected`, custom rule `test_config_rule_variants`, fixture `scenario_fixtures_can_be_enabled` | ☁️ | Apply runs 45447442848, 45460071939; verify run 45692556179: `sec013-tags-custom` NON_COMPLIANT "missing: Owner,ManagedBy,DataClassification", finding SEC-013 REPORTED with the keys | 2026-11-25T20:12Z |
 | 4 | S3 protection violation | ✅ `test_scenario_4_s3_protection_violation_detected` | ☁️ | Apply run 45447442848; verify run 45692556179: public access NON_COMPLIANT, finding SEC-001 REPORTED high, live `GetBucketPolicyStatus` IsPublic=False | 2026-11-24T17:22:22Z (Config), 2026-11-25T20:12Z (verify) |
@@ -223,5 +240,5 @@ See `docs/validation-scenarios.md`. Rows are filled in only as each scenario run
 | 13 | Audit evidence generated | ✅ `test_scenario_13_every_evidence_object_is_complete_and_verifiable`, `test_evidence_checksum_detects_tampering` | ☁️ | Verify run 45692556179: 83 evidence objects; newest has all required fields, recomputed SHA-256 = stored = S3 metadata, Object Lock GOVERNANCE until 2026-12-02 | 2026-11-25T20:12Z |
 | 14 | Compliance report generated | ✅ `test_scenario_14_report_from_real_findings`, `test_report_handler_writes_three_objects`, `test_emf_records_equal_the_report…`, `test_compliance_report.py` | ☁️ | compliance-report run 45750572757: checksums, leak scan clean, metrics = report = DynamoDB recount (P7-2) | 2026-11-26T03:42Z |
 | 15 | Drift / unauthorized change | ✅ `test_scenario_15_unauthorized_change_then_restored_by_pipeline` | ☁️ | SEC-015 + SEC-001 REPORTED 10 s / 2 min after the change; drift run 45753617300 found the address (issue #35); reviewed apply 45753871180 restored; drift run 45754132401 "No drift" (P8-3) | 2026-11-26T04:09Z–04:20Z |
-| 16 | Optional threat findings | ✅ `test_guardduty_sample_findings_scenario_16`, `test_security_hub_findings` | 📝 | — | — |
-| 17 | Verified cleanup | 🧱 plan guard destroy mode (`test_destroy_mode_only_deletes`). Cleanup run is Phase 9 | 📝 | — | — |
+| 16 | Optional threat findings | ✅ `test_guardduty_sample_findings_scenario_16`, `test_security_hub_findings` | ⏭️ not run | SCP denies Security Hub and GuardDuty in this account (discovery D6/D7): offline only, as planned. Never bypassed | — |
+| 17 | Verified cleanup | 🧱 plan guard destroy mode (`test_destroy_mode_only_deletes`), `test_empty_evidence_bucket.py` | ☁️ | Destroy run 45768750372: digest matched, evidence bucket emptied (155, 0 left), 113 destroyed; before/after diff shows only project resources removed (P9-3, P9-4) | 2026-11-26T~06:30Z |

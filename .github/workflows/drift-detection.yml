@@ -5,8 +5,10 @@ name: drift-detection
 
 on:
   workflow_dispatch: # dev only; staging/prod are reference configurations (ADR 0002)
-  schedule:
-    - cron: "23 5 * * 1" # Mondays 05:23 UTC
+  # schedule paused: the dev stack was destroyed in Phase 9 (evidence P9-3). Restore these two lines
+  # after a rebuild (docs/rebuild.md):
+  # schedule:
+  #   - cron: "23 5 * * 1" # Mondays 05:23 UTC
 
 permissions: {}
 
