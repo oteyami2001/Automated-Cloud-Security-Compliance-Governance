@@ -159,6 +159,20 @@ Object Lock evidence bucket. Verified closed in AWS (P6-12).
 | ID | Item | Evidence | Status |
 |---|---|---|---|
 | P7-1 | Posture metrics and checks (code) | The report generator writes its summary as CloudWatch Embedded Metric Format records (namespace `ACSCG/acscg-<env>`: ComplianceScore, ResourcesEvaluated, OpenFindings, RemediatedFindings, OpenFindingsBySeverity). They go to its own log, so no PutMetricData permission is needed. Dashboard: posture and severity widgets. `compliance-report.yml` (read-only plan role) runs `scripts/compliance_report.py`: SHA-256 of the newest stored report, metrics = report, DynamoDB recount = report when recent, leak scan of the public Markdown before it is shown. `verify_deployment.py` scenarios 2–4 now check that Config's result and the finding agree, because the fixture violations are off after Phase 6. Tests: EMF values equal the report and carry no identifiers; the checks pass on a fresh report and fail on tampering, wrong or missing metrics, a recount mismatch and a leaky public report | ✅ |
+| P7-2 | Deployed; **scenario 14** | Plan 45749988466 (`0 to add, 5 to change, 0 to destroy`: four Lambdas, dashboard), apply run 45750090190 owner-approved, digest matched. The owner invoked the report generator once (CloudShell): `reports/2026-11-26T03-41-32Z/report.json`, 6 metric records. **compliance-report run 45750572757 (03:42Z): all checks passed**: stored report and public Markdown match their SHA-256; disclaimer present; leak scan "none found"; posture metrics equal the stored report; DynamoDB recount equals the stored report (report 0 min old). Summary: score 86.5%, 74 evaluated, 10 open (high 1, medium 1, low 8), 2 remediated (verified), 0 synthetic/sample | ☁️ |
+| P7-3 | Dead letters found and cleared | verify run 45750575619 reported `dead-letter queue empty: 4` (FAIL). The owner peeked without deleting: messages sent 2026-11-25T21:22:39Z and 22:41:35Z, Lambda async failures of the Phase 6 gatekeeper; AWS error message "REMEDIATION_FAILED -> REMEDIATION_FAILED is not allowed", the defect fixed in P6-6 (the gatekeeper was removed in P6-12). The owner purged the queue. **verify run 45751076906 (03:47Z): all checks passed**, including DLQ 0 and scenarios 2 and 4 in the closed-window state. Gap noted: `verify_deployment.py` counted Lambda errors only for the four compliance functions, so the gatekeeper's errors did not show; the DLQ check caught them | ☁️ |
+
+### Phase 7 report (2026-11-26)
+
+**Result:** scenario 14 verified in AWS. The daily report, the posture metrics and a recount of the
+findings table give the same numbers, and the public report passes an identifier scan before it is
+shown. The dashboard shows posture next to operational health. No new IAM permission and no bootstrap
+change: metrics go through the function's own log (EMF), and the workflow uses the read-only role.
+verify-deployment found 4 dead letters left by the Phase 6 gatekeeper defect (already fixed); the
+owner checked and cleared them, and every check now passes.
+
+**Carried forward:** a scheduled verify run and the drift workflow are Phase 8; the `Project`
+cost-allocation tag check (P3-8) is still open.
 
 ## Validation scenarios (Phase 9 target)
 
@@ -179,7 +193,7 @@ See `docs/validation-scenarios.md`. Rows are filled in only as each scenario run
 | 11 | Post-remediation compliance verified | ✅ `test_scenarios_9_and_11…`, `test_sg_verify_detects_collateral_changes`, `test_stale_noncompliant_result_does_not_fail_verification` | ☁️ | Owner approved run `8eeac375…` as `AccountFullAccessRole` (23:22:30Z), `Success`, Config re-evaluated → `VERIFIED_RESOLVED` (P6-8, P6-9) | 2026-11-25T23:22Z |
 | 12 | Notifications delivered | 🧱 message content and de-duplication tested. Delivery needs AWS | ☁️ | SNS `NumberOfNotificationsDelivered` = 12 in 2 h (owner CloudShell), 0 failed; subscription confirmed by the owner. Verify check widened to 7 days (P5-11) | 2026-11-24T~18:00Z |
 | 13 | Audit evidence generated | ✅ `test_scenario_13_every_evidence_object_is_complete_and_verifiable`, `test_evidence_checksum_detects_tampering` | ☁️ | Verify run 45692556179: 83 evidence objects; newest has all required fields, recomputed SHA-256 = stored = S3 metadata, Object Lock GOVERNANCE until 2026-12-02 | 2026-11-25T20:12Z |
-| 14 | Compliance report generated | ✅ `test_scenario_14_report_from_real_findings`, `test_report_handler_writes_three_objects` | 📝 | — | — |
+| 14 | Compliance report generated | ✅ `test_scenario_14_report_from_real_findings`, `test_report_handler_writes_three_objects`, `test_emf_records_equal_the_report…`, `test_compliance_report.py` | ☁️ | compliance-report run 45750572757: checksums, leak scan clean, metrics = report = DynamoDB recount (P7-2) | 2026-11-26T03:42Z |
 | 15 | Drift / unauthorized change | ✅ `test_scenario_15_unauthorized_change_then_restored_by_pipeline`. Drift workflow is Phase 8 | 📝 | — | — |
 | 16 | Optional threat findings | ✅ `test_guardduty_sample_findings_scenario_16`, `test_security_hub_findings` | 📝 | — | — |
 | 17 | Verified cleanup | 🧱 plan guard destroy mode (`test_destroy_mode_only_deletes`). Cleanup run is Phase 9 | 📝 | — | — |
