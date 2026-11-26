@@ -14,7 +14,7 @@ locals {
   gatekeeper    = "${local.name_prefix}-remediation-gatekeeper"
   gatekeeper_fn = "${local.arn}:lambda:${var.region}:${var.aws_account_id}:function:${local.gatekeeper}"
 
-  policy_source = yamldecode(templatefile("${path.module}/../../policies/remediation/${var.environment}.yaml", {
+  policy_source = yamldecode(templatefile(var.policy_source_file == null ? "${path.module}/../../policies/remediation/${var.environment}.yaml" : "${path.module}/../../${var.policy_source_file}", {
     account_id     = var.aws_account_id
     region         = var.region
     fixture_sg_arn = try(aws_security_group.fixture[0].arn, "")

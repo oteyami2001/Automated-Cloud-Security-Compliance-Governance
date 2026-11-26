@@ -60,21 +60,15 @@ variables {
   approvers              = ["arn:aws:iam::111122223333:role/security-approver"]
   allow_synthetic_events = true
   enable_test_fixtures   = true
-  enable_remediation     = true # the committed dev policy has a Phase 6 window open
+  enable_remediation     = false # Phase 6 window closed (step D): the committed dev policy is report-only
 }
 
-run "dev_window_targets_fixtures_only_and_owns_nothing_account_wide" {
+run "dev_is_report_only_and_owns_nothing_account_wide" {
   command = apply
 
   assert {
-    condition = output.remediation_mode == "report_only" || alltrue([
-      for e in jsondecode(aws_ssm_parameter.policy.value).allowlist : contains(output.fixture_arns, e.resource_arn)
-    ])
-    error_message = "a dev remediation window may target the test fixtures only"
-  }
-  assert {
-    condition     = contains(output.fixture_arns, [for e in jsondecode(aws_ssm_parameter.policy.value).allowlist : e.resource_arn if e.id == "AL-001"][0])
-    error_message = "the fixture SG ARN is rendered into the allowlist (never committed)"
+    condition     = !jsondecode(aws_ssm_parameter.policy.value).remediation_enabled && length(jsondecode(aws_ssm_parameter.policy.value).allowlist) == 0
+    error_message = "the committed dev policy is report-only with an empty allowlist after the Phase 6 window"
   }
   assert {
     condition     = !output.ownership.config_recorder && !output.ownership.security_hub && !output.ownership.guardduty && !output.ownership.cloudtrail
@@ -89,8 +83,8 @@ run "dev_window_targets_fixtures_only_and_owns_nothing_account_wide" {
     error_message = "synthetic events only in dev; GuardDuty rule only when enabled"
   }
   assert {
-    condition     = length(module.remediation) == 1 && length(output.runbook_documents) == 5 && contains(keys(output.function_names), "remediation-gatekeeper")
-    error_message = "the remediation module is deployed while a window is open (enable_remediation)"
+    condition     = length(module.remediation) == 0 && length(output.runbook_documents) == 0 && !contains(keys(output.function_names), "remediation-gatekeeper")
+    error_message = "no remediation module outside a window"
   }
   assert {
     condition     = aws_ssm_parameter.policy.type == "SecureString" && aws_ssm_parameter.policy.name == "/acscg/dev/platform-policy"
@@ -175,9 +169,32 @@ run "scenario_fixtures_can_be_enabled" {
   }
 }
 
+run "dev_window_targets_fixtures_only" {
+  command = apply
+  variables {
+    policy_source_file = "tests/fixtures/dev-window.yaml"
+    enable_remediation = true
+  }
+  assert {
+    condition = alltrue([
+      for e in jsondecode(aws_ssm_parameter.policy.value).allowlist : contains(output.fixture_arns, e.resource_arn)
+    ])
+    error_message = "a dev remediation window may target the test fixtures only"
+  }
+  assert {
+    condition     = contains(output.fixture_arns, [for e in jsondecode(aws_ssm_parameter.policy.value).allowlist : e.resource_arn if e.id == "AL-001"][0])
+    error_message = "the fixture SG ARN is rendered into the allowlist (never committed)"
+  }
+  assert {
+    condition     = length(module.remediation) == 1 && length(output.runbook_documents) == 5 && contains(keys(output.function_names), "remediation-gatekeeper")
+    error_message = "the remediation module is deployed while a window is open (enable_remediation)"
+  }
+}
+
 run "dev_window_without_the_module_is_rejected" {
   command = plan
   variables {
+    policy_source_file = "tests/fixtures/dev-window.yaml"
     enable_remediation = false
   }
   expect_failures = [aws_ssm_parameter.policy]
@@ -186,9 +203,19 @@ run "dev_window_without_the_module_is_rejected" {
 run "dev_window_without_fixtures_is_rejected" {
   command = plan
   variables {
+    policy_source_file   = "tests/fixtures/dev-window.yaml"
     enable_test_fixtures = false
+    enable_remediation   = true
   }
   expect_failures = [aws_ssm_parameter.policy]
+}
+
+run "policy_source_file_is_limited_to_test_fixtures" {
+  command = plan
+  variables {
+    policy_source_file = "policies/remediation/prod.yaml"
+  }
+  expect_failures = [var.policy_source_file]
 }
 
 run "prod_reference" {

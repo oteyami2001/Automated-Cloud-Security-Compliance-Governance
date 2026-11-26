@@ -151,3 +151,13 @@ variable "fixture_log_group_violations" {
   type        = bool
   default     = false
 }
+
+variable "policy_source_file" {
+  description = "Tests only: a policy source under tests/fixtures/ instead of policies/remediation/<env>.yaml (null in every deployment)."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.policy_source_file == null || can(regex("^tests/fixtures/[a-z0-9-]+\\.yaml$", var.policy_source_file))
+    error_message = "policy_source_file may only name a test fixture under tests/fixtures/."
+  }
+}
