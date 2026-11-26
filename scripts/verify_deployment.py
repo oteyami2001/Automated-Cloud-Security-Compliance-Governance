@@ -126,6 +126,24 @@ def _s(item: dict[str, Any], key: str) -> str:
     return str(item.get(key, {}).get("S", ""))
 
 
+CORE_FUNCTIONS = ("findings-processor", "config-evaluator", "findings-reconciler", "report-generator")
+
+
+def _project_functions(cw: Any, prefix: str) -> set[str]:
+    """Lambda functions of this project with an Errors metric in the last two weeks."""
+    names: set[str] = set()
+    kwargs: dict[str, Any] = {"Namespace": "AWS/Lambda", "MetricName": "Errors"}
+    while True:
+        page = cw.list_metrics(**kwargs)
+        for metric in page.get("Metrics", []):
+            for dim in metric.get("Dimensions", []):
+                if dim["Name"] == "FunctionName" and dim["Value"].startswith(f"{prefix}-"):
+                    names.add(dim["Value"])
+        if not page.get("NextToken"):
+            return names
+        kwargs["NextToken"] = page["NextToken"]
+
+
 def _metric_sum(cw: Any, metric: tuple[str, str], dims: dict[str, str], *, hours: int, now: datetime) -> float:
     """Sum of a CloudWatch metric over the last ``hours``; ``metric`` is (namespace, name)."""
     stats = cw.get_metric_statistics(
@@ -166,11 +184,13 @@ def verify(c: Clients, env: str, region: str, now: datetime | None = None) -> Re
     rep.check("config recorder recording", bool(own) and own[0]["recording"] and own[0].get("lastStatus") == "SUCCESS")
     names = [r["ConfigRuleName"] for r in c.config.describe_config_rules()["ConfigRules"]]
     rep.info("project config rules", str(sum(n.startswith("acscg-") for n in names)))
+    # Every project function that reported metrics recently, not a fixed list: a fixed list missed the
+    # Phase 6 gatekeeper's errors (evidence P7-3).
+    functions = sorted(_project_functions(c.cloudwatch, prefix) | {f"{prefix}-{f}" for f in CORE_FUNCTIONS})
     errors = sum(
-        _metric_sum(c.cloudwatch, ("AWS/Lambda", "Errors"), {"FunctionName": f"{prefix}-{f}"}, hours=24, now=now)
-        for f in ("findings-processor", "config-evaluator", "findings-reconciler", "report-generator")
+        _metric_sum(c.cloudwatch, ("AWS/Lambda", "Errors"), {"FunctionName": fn}, hours=24, now=now) for fn in functions
     )
-    rep.check("lambda errors (24 h)", errors == 0, f"{errors:.0f}")
+    rep.check(f"lambda errors (24 h, {len(functions)} functions)", errors == 0, f"{errors:.0f}")
     url = c.sqs.get_queue_url(QueueName=f"{prefix}-findings-dlq")["QueueUrl"]
     depth = int(
         c.sqs.get_queue_attributes(QueueUrl=url, AttributeNames=["ApproximateNumberOfMessages"])["Attributes"][

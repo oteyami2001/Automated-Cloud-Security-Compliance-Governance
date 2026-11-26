@@ -1,0 +1,133 @@
+# Verified cleanup (scenario 17, Phase 9). Two steps, like plan/apply (ADR 0008):
+#   1. run with an empty digest: read-only destroy plan (role dev-plan) prints the destroy digest;
+#   2. run with that digest and confirm=destroy-dev: the dev-cleanup environment waits for the owner's
+#      approval, re-plans the destroy and destroys only if the digest is unchanged.
+# The plan guard rejects anything but deletes in destroy mode, and a destroy digest can never equal
+# an apply digest (the mode is part of it).
+name: cleanup
+
+on:
+  workflow_dispatch: # checkov:skip=CKV_GHA_7:The inputs do not change what is built; the digest and confirmation only gate the destroy (ADR 0008).
+    inputs:
+      digest:
+        description: Empty = plan the destroy. Otherwise the digest from the reviewed destroy plan run.
+        type: string
+        required: false
+        default: ""
+      confirm:
+        description: Type destroy-dev to destroy (ignored when planning)
+        type: string
+        required: false
+        default: ""
+
+permissions: {}
+
+concurrency:
+  group: terraform-dev
+  cancel-in-progress: false
+
+env:
+  TERRAFORM_VERSION: "1.17.2"
+  AWS_REGION: us-east-2
+
+jobs:
+  destroy-plan:
+    name: destroy plan (dev, read-only)
+    if: inputs.digest == ''
+    runs-on: ubuntu-24.04
+    environment: dev-plan
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Environment secrets present
+        env:
+          ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+        run: |
+          [[ $ACCOUNT_ID =~ ^[0-9]{12}$ ]] || { echo "::error::secret AWS_ACCOUNT_ID is missing or not 12 digits in this environment"; exit 1; }
+          [ -n "$ALERT_EMAIL" ] || { echo "::error::secret ALERT_EMAIL is missing in this environment"; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      - name: Install pinned, hash-verified dependencies
+        run: python -m pip install --require-hashes --no-deps -r requirements-dev.lock
+      - name: Build the Lambda package (reproducible)
+        run: python scripts/build_lambda.py
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/acscg-github-dev-plan
+          role-session-name: acscg-destroy-plan-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+      - name: Destroy plan, guard and digest
+        env:
+          TF_VAR_aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
+          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
+          TF_IN_AUTOMATION: "1"
+          APPROVERS: ${{ secrets.APPROVERS }}
+        run: |
+          if [ -n "$APPROVERS" ]; then TF_VAR_approvers=$(python scripts/normalise_approvers.py) || exit 1; export TF_VAR_approvers; fi
+          bash scripts/tf_ci.sh plan dev destroy
+
+  destroy:
+    name: destroy (dev, owner-approved)
+    if: inputs.digest != ''
+    runs-on: ubuntu-24.04
+    environment: dev-cleanup
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Environment secrets present
+        env:
+          ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+        run: |
+          [[ $ACCOUNT_ID =~ ^[0-9]{12}$ ]] || { echo "::error::secret AWS_ACCOUNT_ID is missing or not 12 digits in this environment"; exit 1; }
+          [ -n "$ALERT_EMAIL" ] || { echo "::error::secret ALERT_EMAIL is missing in this environment"; exit 1; }
+      - name: Inputs are well-formed
+        env:
+          EXPECTED_DIGEST: ${{ inputs.digest }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          [[ $EXPECTED_DIGEST =~ ^[0-9a-f]{64}$ ]] || { echo "::error::digest must be 64 lowercase hex characters"; exit 1; }
+          [ "$CONFIRM" = destroy-dev ] || { echo "::error::confirm must be destroy-dev"; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      - name: Install pinned, hash-verified dependencies
+        run: python -m pip install --require-hashes --no-deps -r requirements-dev.lock
+      - name: Build the Lambda package (reproducible)
+        run: python scripts/build_lambda.py
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/acscg-github-dev-cleanup
+          role-session-name: acscg-cleanup-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+      - name: Re-plan the destroy, verify digest, destroy
+        env:
+          TF_VAR_aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
+          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
+          TF_IN_AUTOMATION: "1"
+          APPROVERS: ${{ secrets.APPROVERS }}
+          EXPECTED_DIGEST: ${{ inputs.digest }}
+          CONFIRM_DESTROY: ${{ inputs.confirm }}
+        run: |
+          if [ -n "$APPROVERS" ]; then TF_VAR_approvers=$(python scripts/normalise_approvers.py) || exit 1; export TF_VAR_approvers; fi
+          bash scripts/tf_ci.sh apply dev destroy
